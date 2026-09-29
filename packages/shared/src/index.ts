@@ -3,3 +3,7 @@ export * from './time';
 export * from './billing/intervals';
 export * from './billing/tariff';
 export * from './billing/charge';
+export * from './billing/session-charge';
+export * from './status';
+export * from './labels';
+export * from './views';
