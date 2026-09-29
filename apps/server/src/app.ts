@@ -8,6 +8,10 @@ import type { Clock } from './lib/clock';
 import { registerErrorHandler } from './lib/errors';
 import { authRoutes } from './modules/auth/auth.routes';
 import { installAuth } from './modules/auth/guard';
+import { packagesRoutes } from './modules/catalog/packages.routes';
+import { tariffsRoutes } from './modules/catalog/tariffs.routes';
+import { unitTypesRoutes } from './modules/catalog/unit-types.routes';
+import { unitsRoutes } from './modules/catalog/units.routes';
 import { settingsRoutes } from './modules/settings/settings.routes';
 import { usersRoutes } from './modules/users/users.routes';
 
@@ -33,6 +37,10 @@ export async function buildApp(deps: BuildAppDeps) {
       await api.register(authRoutes(ctx));
       await api.register(settingsRoutes(ctx));
       await api.register(usersRoutes(ctx));
+      await api.register(unitTypesRoutes(ctx));
+      await api.register(unitsRoutes(ctx));
+      await api.register(tariffsRoutes(ctx));
+      await api.register(packagesRoutes(ctx));
     },
     { prefix: '/api' },
   );

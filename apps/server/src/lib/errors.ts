@@ -35,6 +35,11 @@ export function registerErrorHandler(app: FastifyInstance): void {
       if (err.code === 'P2003') return reply.status(409).send({ error: { code: 'IN_USE', message: 'Data masih dipakai oleh data lain' } });
       if (err.code === 'P2025') return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Data tidak ditemukan' } });
     }
+    // relasi dengan onDelete: Restrict didorong ke Postgres (relationMode default "foreignKeys"),
+    // sehingga pelanggarannya muncul sebagai error mentah (SQLSTATE 23001/23503), bukan P2003.
+    if (err instanceof Prisma.PrismaClientUnknownRequestError && /code: "23(001|503)"/.test(err.message)) {
+      return reply.status(409).send({ error: { code: 'IN_USE', message: 'Data masih dipakai oleh data lain' } });
+    }
     const status = (err as FastifyError).statusCode;
     if (status && status < 500) {
       return reply.status(status).send({ error: { code: 'BAD_REQUEST', message: err.message } });
