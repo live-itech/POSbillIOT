@@ -1,0 +1,271 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum OutletType {
+  BILLIARD
+  PLAYSTATION
+}
+
+enum Role {
+  KASIR
+  SUPERVISOR
+  OWNER
+}
+
+enum UnitState {
+  ACTIVE
+  MAINTENANCE
+}
+
+enum SessionMode {
+  OPEN
+  PACKAGE
+}
+
+enum SessionStatus {
+  RUNNING
+  PAUSED
+  EXPIRED
+  ENDED
+}
+
+enum BillStatus {
+  OPEN
+  PAID
+  VOID
+}
+
+enum DeviceEventType {
+  CMD_ON
+  CMD_OFF
+  ACK
+  FAIL
+  ONLINE
+  OFFLINE
+  UNEXPECTED_ON
+}
+
+model Setting {
+  id                Int        @id @default(1)
+  outletType        OutletType @default(BILLIARD)
+  outletName        String     @default("FunPlay")
+  address           String     @default("")
+  utcOffsetMin      Int        @default(420)
+  roundingBlockMin  Int        @default(15)
+  minChargeMin      Int        @default(60)
+  warnBeforeMin     Int        @default(5)
+  pauseKeepsLightOn Boolean    @default(true)
+  autoOffUnexpected Boolean    @default(false)
+  updatedAt         DateTime   @updatedAt
+}
+
+model User {
+  id             String         @id @default(cuid())
+  name           String
+  username       String         @unique
+  passwordHash   String
+  pinHash        String?
+  role           Role
+  active         Boolean        @default(true)
+  failedPinCount Int            @default(0)
+  lockedUntil    DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  loginSessions  LoginSession[]
+}
+
+model LoginSession {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model UnitType {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  color     String    @default("#7C3AED")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  units     Unit[]
+  tariffs   Tariff[]
+  packages  Package[]
+}
+
+model Device {
+  id         String        @id @default(cuid())
+  name       String        @unique
+  driver     String
+  codec      String?
+  host       String?
+  port       Int?
+  channels   Int           @default(8)
+  config     Json          @default("{}")
+  online     Boolean       @default(false)
+  lastSeenAt DateTime?
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+  units      Unit[]
+  events     DeviceEvent[]
+}
+
+model Unit {
+  id            String           @id @default(cuid())
+  name          String           @unique
+  unitTypeId    String
+  unitType      UnitType         @relation(fields: [unitTypeId], references: [id], onDelete: Restrict)
+  area          String           @default("")
+  deviceId      String?
+  device        Device?          @relation(fields: [deviceId], references: [id], onDelete: Restrict)
+  relayChannel  Int?
+  state         UnitState        @default(ACTIVE)
+  lightOverride Boolean?
+  sortOrder     Int              @default(0)
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  sessions      Session[]        @relation("UnitSessions")
+  activeSession Session?         @relation("ActiveSession")
+  segments      SessionSegment[]
+
+  @@unique([deviceId, relayChannel])
+}
+
+model Tariff {
+  id           String   @id @default(cuid())
+  name         String
+  unitTypeId   String
+  unitType     UnitType @relation(fields: [unitTypeId], references: [id], onDelete: Restrict)
+  daysMask     Int      @default(127)
+  startMin     Int
+  endMin       Int
+  pricePerHour Int
+  priority     Int      @default(0)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Package {
+  id          String    @id @default(cuid())
+  name        String
+  unitTypeId  String
+  unitType    UnitType  @relation(fields: [unitTypeId], references: [id], onDelete: Restrict)
+  durationMin Int
+  price       Int
+  active      Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  sessions    Session[]
+}
+
+model BillCounter {
+  date String @id
+  last Int
+}
+
+/// M1 hanya membuat Bill OPEN per sesi; checkout, baris & pembayaran ditambah di M2.
+model Bill {
+  id          String     @id @default(cuid())
+  number      String     @unique
+  status      BillStatus @default(OPEN)
+  createdById String
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  sessions    Session[]
+}
+
+model Session {
+  id                 String             @id @default(cuid())
+  billId             String
+  bill               Bill               @relation(fields: [billId], references: [id])
+  unitId             String
+  unit               Unit               @relation("UnitSessions", fields: [unitId], references: [id])
+  /// Terisi = unitId selama sesi aktif (RUNNING/PAUSED/EXPIRED); null saat ENDED. Unik → satu sesi aktif per meja.
+  activeUnitId       String?            @unique
+  activeUnit         Unit?              @relation("ActiveSession", fields: [activeUnitId], references: [id])
+  mode               SessionMode
+  packageId          String?
+  package            Package?           @relation(fields: [packageId], references: [id])
+  packageName        String?
+  packageDurationMin Int?
+  packagePrice       Int?
+  status             SessionStatus      @default(RUNNING)
+  startedAt          DateTime
+  plannedEndAt       DateTime?
+  endedAt            DateTime?
+  warnedAt           DateTime?
+  chargeTotal        Int?
+  chargeDetail       Json?
+  startedById        String
+  endedById          String?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  segments           SessionSegment[]
+  pauses             SessionPause[]
+  extensions         SessionExtension[]
+
+  @@index([status])
+}
+
+model SessionSegment {
+  id         String    @id @default(cuid())
+  sessionId  String
+  session    Session   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  unitId     String
+  unit       Unit      @relation(fields: [unitId], references: [id])
+  unitTypeId String
+  startedAt  DateTime
+  endedAt    DateTime?
+}
+
+model SessionPause {
+  id           String    @id @default(cuid())
+  sessionId    String
+  session      Session   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  pausedAt     DateTime
+  resumedAt    DateTime?
+  approvedById String
+}
+
+model SessionExtension {
+  id          String   @id @default(cuid())
+  sessionId   String
+  session     Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  minutes     Int
+  requestId   String   @unique
+  createdById String
+  createdAt   DateTime @default(now())
+}
+
+model AuditLog {
+  id           String   @id @default(cuid())
+  at           DateTime @default(now())
+  userId       String?
+  action       String
+  entity       String
+  entityId     String?
+  data         Json     @default("{}")
+  approvedById String?
+
+  @@index([at])
+}
+
+model DeviceEvent {
+  id       String          @id @default(cuid())
+  at       DateTime        @default(now())
+  deviceId String
+  device   Device          @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  channel  Int?
+  type     DeviceEventType
+  detail   Json            @default("{}")
+
+  @@index([deviceId, at])
+}
