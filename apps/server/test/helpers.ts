@@ -52,3 +52,23 @@ export async function loginAs(app: FastifyInstance, username: string, password =
   if (!c) throw new Error('cookie tidak ada');
   return `fp_session=${c.value}`;
 }
+
+export async function seedBasics() {
+  await prisma.setting.upsert({ where: { id: 1 }, create: { id: 1 }, update: {} });
+  const reg = await prisma.unitType.create({ data: { name: 'Reguler' } });
+  const vip = await prisma.unitType.create({ data: { name: 'VIP' } });
+  const device = await prisma.device.create({ data: { name: 'Sim A', driver: 'simulator', channels: 4 } });
+  const m1 = await prisma.unit.create({ data: { name: 'Meja 1', unitTypeId: reg.id, deviceId: device.id, relayChannel: 1, sortOrder: 1 } });
+  const m2 = await prisma.unit.create({ data: { name: 'Meja 2', unitTypeId: reg.id, deviceId: device.id, relayChannel: 2, sortOrder: 2 } });
+  const v1 = await prisma.unit.create({ data: { name: 'VIP 1', unitTypeId: vip.id, deviceId: device.id, relayChannel: 3, sortOrder: 3 } });
+  await prisma.tariff.createMany({
+    data: [
+      { name: 'Reguler Siang', unitTypeId: reg.id, startMin: 480, endMin: 1080, pricePerHour: 40000 },
+      { name: 'Reguler Malam', unitTypeId: reg.id, startMin: 1080, endMin: 480, pricePerHour: 50000 },
+      { name: 'VIP', unitTypeId: vip.id, startMin: 0, endMin: 1440, pricePerHour: 80000 },
+    ],
+  });
+  const pkg1 = await prisma.package.create({ data: { name: 'Paket 1 Jam', unitTypeId: reg.id, durationMin: 60, price: 45000 } });
+  const pkg2 = await prisma.package.create({ data: { name: 'Paket 2 Jam', unitTypeId: reg.id, durationMin: 120, price: 90000 } });
+  return { reg, vip, device, m1, m2, v1, pkg1, pkg2 };
+}
