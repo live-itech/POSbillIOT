@@ -15,6 +15,8 @@ import { unitsRoutes } from './modules/catalog/units.routes';
 import { DeviceManager } from './modules/devices/device-manager';
 import { devicesRoutes } from './modules/devices/devices.routes';
 import { createDefaultDriverFactory, type DriverFactory } from './modules/devices/driver';
+import { sessionsRoutes } from './modules/sessions/sessions.routes';
+import { SessionService } from './modules/sessions/sessions.service';
 import { settingsRoutes } from './modules/settings/settings.routes';
 import { usersRoutes } from './modules/users/users.routes';
 
@@ -38,7 +40,8 @@ export async function buildApp(deps: BuildAppDeps) {
     driverFactory: deps.driverFactory ?? createDefaultDriverFactory(),
     log: app.log,
   });
-  const ctx: AppContext = { prisma: deps.prisma, clock: deps.clock, config: deps.config, bus, devices };
+  const ctx = { prisma: deps.prisma, clock: deps.clock, config: deps.config, bus, devices } as AppContext;
+  ctx.sessions = new SessionService(ctx);
 
   registerErrorHandler(app);
   await app.register(cookie, { secret: deps.config.COOKIE_SECRET });
@@ -55,6 +58,7 @@ export async function buildApp(deps: BuildAppDeps) {
       await api.register(tariffsRoutes(ctx));
       await api.register(packagesRoutes(ctx));
       await api.register(devicesRoutes(ctx));
+      await api.register(sessionsRoutes(ctx));
     },
     { prefix: '/api' },
   );
