@@ -5,6 +5,8 @@ import { buildApp } from '../src/app';
 import { loadConfig } from '../src/config';
 import { FakeClock } from '../src/lib/clock';
 import { hashSecret } from '../src/modules/auth/password';
+import type { DriverFactory } from '../src/modules/devices/driver';
+import { SimulatorDriver } from '../src/modules/devices/simulator.driver';
 
 export const prisma = new PrismaClient();
 
@@ -20,10 +22,17 @@ export async function resetDb(): Promise<void> {
 
 export async function makeApp(opts: { now?: Date; configure?: (app: FastifyInstance) => void } = {}) {
   const clock = new FakeClock(opts.now ?? T0);
-  const { app, ctx } = await buildApp({ prisma, clock, config: loadConfig(), startLoops: false });
+  const sims = new Map<string, SimulatorDriver>();
+  const driverFactory: DriverFactory = (row) => {
+    const s = new SimulatorDriver(row.channels);
+    sims.set(row.id, s);
+    return s;
+  };
+  const { app, ctx } = await buildApp({ prisma, clock, config: loadConfig(), driverFactory, startLoops: false });
   opts.configure?.(app);
   await app.ready();
-  return { app, ctx, clock };
+  await ctx.devices.reconcileAll();
+  return { app, ctx, clock, sims };
 }
 
 export async function createUser(role: Role, username = role.toLowerCase(), opts: { password?: string; pin?: string } = {}) {
