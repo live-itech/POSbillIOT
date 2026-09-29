@@ -7,6 +7,7 @@ import type { AppContext } from '../../context';
 import type { Db } from '../../db';
 import { badRequest, conflict, notFound } from '../../lib/errors';
 import { audit } from '../audit/audit';
+import { approveWithPin } from '../auth/auth.service';
 import { loadTariffRules } from '../catalog/tariffs.service';
 import { getSettings } from '../settings/settings.service';
 
@@ -124,5 +125,113 @@ export class SessionService {
 
     this.touch(result.session.unitId);
     return result;
+  }
+
+  private async loadForUpdate(tx: Db, sessionId: string) {
+    const s = await tx.session.findUnique({ where: { id: sessionId } });
+    if (!s) throw notFound('Sesi');
+    if (s.status === 'ENDED') throw conflict('SESSION_ENDED', 'Sesi sudah selesai');
+    return s;
+  }
+
+  async extend(user: PublicUser, sessionId: string, input: { minutes: number; requestId: string }): Promise<Session> {
+    const { prisma, clock } = this.ctx;
+    const now = clock.now();
+    const session = await prisma.$transaction(async (tx) => {
+      const dup = await tx.sessionExtension.findUnique({ where: { requestId: input.requestId } });
+      if (dup) return tx.session.findUniqueOrThrow({ where: { id: dup.sessionId } });
+
+      const s = await this.loadForUpdate(tx, sessionId);
+      if (s.mode === 'OPEN' || !s.plannedEndAt) throw badRequest('EXTEND_OPEN', 'Sesi open billing tidak perlu tambah waktu');
+      await tx.sessionExtension.create({ data: { sessionId: s.id, minutes: input.minutes, requestId: input.requestId, createdById: user.id } });
+
+      let updated: Session;
+      if (s.status === 'EXPIRED') {
+        const unit = await tx.unit.findUniqueOrThrow({ where: { id: s.unitId } });
+        await tx.sessionSegment.create({ data: { sessionId: s.id, unitId: unit.id, unitTypeId: unit.unitTypeId, startedAt: now } });
+        updated = await tx.session.update({
+          where: { id: s.id },
+          data: { status: 'RUNNING', endedAt: null, warnedAt: null, plannedEndAt: addMinutes(now, input.minutes) },
+        });
+      } else {
+        updated = await tx.session.update({
+          where: { id: s.id },
+          data: { plannedEndAt: addMinutes(s.plannedEndAt, input.minutes), warnedAt: null },
+        });
+      }
+      await audit(tx, { userId: user.id, action: 'session.extend', entity: 'Session', entityId: s.id, data: { minutes: input.minutes } });
+      return updated;
+    });
+    this.touch(session.unitId);
+    return session;
+  }
+
+  async move(user: PublicUser, sessionId: string, toUnitId: string): Promise<{ from: string; to: string }> {
+    const { prisma, clock } = this.ctx;
+    const now = clock.now();
+    const target = await prisma.unit.findUnique({ where: { id: toUnitId }, select: { name: true } });
+    let result: { from: string; to: string };
+    try {
+      result = await prisma.$transaction(async (tx) => {
+        const s = await this.loadForUpdate(tx, sessionId);
+        if (s.status !== 'RUNNING' && s.status !== 'PAUSED') throw conflict('SESSION_NOT_ACTIVE', 'Sesi tidak sedang berjalan');
+        if (s.unitId === toUnitId) throw badRequest('SAME_UNIT', 'Pilih meja lain');
+        const to = await tx.unit.findUnique({ where: { id: toUnitId }, include: { activeSession: true } });
+        if (!to) throw notFound('Meja tujuan');
+        if (to.state === 'MAINTENANCE') throw conflict('UNIT_MAINTENANCE', `${to.name} sedang maintenance`);
+        if (to.activeSession) throw conflict('UNIT_BUSY', `${to.name} sedang dipakai`);
+
+        await tx.sessionSegment.updateMany({ where: { sessionId: s.id, endedAt: null }, data: { endedAt: now } });
+        await tx.sessionSegment.create({ data: { sessionId: s.id, unitId: to.id, unitTypeId: to.unitTypeId, startedAt: now } });
+        await tx.session.update({ where: { id: s.id }, data: { unitId: to.id, activeUnitId: to.id } });
+        if (to.lightOverride !== null) await tx.unit.update({ where: { id: to.id }, data: { lightOverride: null } });
+        await audit(tx, { userId: user.id, action: 'session.move', entity: 'Session', entityId: s.id, data: { from: s.unitId, to: to.id } });
+        return { from: s.unitId, to: to.id };
+      });
+    } catch (err) {
+      rethrowBusy(err, target?.name ?? 'Meja tujuan');
+    }
+    this.touch(result.from, result.to);
+    return result;
+  }
+
+  async pause(user: PublicUser, sessionId: string, approvalPin?: string): Promise<Session> {
+    const { prisma, clock } = this.ctx;
+    const approvedById = await approveWithPin(prisma, clock, user, approvalPin);
+    const now = clock.now();
+    const session = await prisma.$transaction(async (tx) => {
+      const s = await this.loadForUpdate(tx, sessionId);
+      if (s.status !== 'RUNNING') throw conflict('SESSION_NOT_RUNNING', 'Hanya sesi yang berjalan yang bisa di-pause');
+      await tx.sessionPause.create({ data: { sessionId: s.id, pausedAt: now, approvedById } });
+      const updated = await tx.session.update({ where: { id: s.id }, data: { status: 'PAUSED' } });
+      await audit(tx, { userId: user.id, action: 'session.pause', entity: 'Session', entityId: s.id, approvedById });
+      return updated;
+    });
+    this.touch(session.unitId);
+    return session;
+  }
+
+  async resume(user: PublicUser, sessionId: string): Promise<Session> {
+    const { prisma, clock } = this.ctx;
+    const now = clock.now();
+    const session = await prisma.$transaction(async (tx) => {
+      const s = await this.loadForUpdate(tx, sessionId);
+      if (s.status !== 'PAUSED') throw conflict('SESSION_NOT_PAUSED', 'Sesi tidak sedang di-pause');
+      const open = await tx.sessionPause.findFirstOrThrow({ where: { sessionId: s.id, resumedAt: null } });
+      await tx.sessionPause.update({ where: { id: open.id }, data: { resumedAt: now } });
+      const pausedMs = now.getTime() - open.pausedAt.getTime();
+      const updated = await tx.session.update({
+        where: { id: s.id },
+        data: {
+          status: 'RUNNING',
+          plannedEndAt: s.plannedEndAt ? new Date(s.plannedEndAt.getTime() + pausedMs) : null,
+          warnedAt: null,
+        },
+      });
+      await audit(tx, { userId: user.id, action: 'session.resume', entity: 'Session', entityId: s.id, data: { pausedMs } });
+      return updated;
+    });
+    this.touch(session.unitId);
+    return session;
   }
 }
