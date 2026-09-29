@@ -6,6 +6,8 @@ import type { AppContext } from './context';
 import { Bus } from './lib/bus';
 import type { Clock } from './lib/clock';
 import { registerErrorHandler } from './lib/errors';
+import { authRoutes } from './modules/auth/auth.routes';
+import { installAuth } from './modules/auth/guard';
 
 export interface BuildAppDeps {
   prisma: PrismaClient;
@@ -21,10 +23,12 @@ export async function buildApp(deps: BuildAppDeps) {
 
   registerErrorHandler(app);
   await app.register(cookie, { secret: deps.config.COOKIE_SECRET });
+  installAuth(app, ctx);
 
   await app.register(
     async (api) => {
       api.get('/health', async () => ({ ok: true, serverTime: ctx.clock.now().toISOString() }));
+      await api.register(authRoutes(ctx));
     },
     { prefix: '/api' },
   );
