@@ -8,6 +8,8 @@ import type { Clock } from './lib/clock';
 import { registerErrorHandler } from './lib/errors';
 import { authRoutes } from './modules/auth/auth.routes';
 import { installAuth } from './modules/auth/guard';
+import { settingsRoutes } from './modules/settings/settings.routes';
+import { usersRoutes } from './modules/users/users.routes';
 
 export interface BuildAppDeps {
   prisma: PrismaClient;
@@ -29,6 +31,8 @@ export async function buildApp(deps: BuildAppDeps) {
     async (api) => {
       api.get('/health', async () => ({ ok: true, serverTime: ctx.clock.now().toISOString() }));
       await api.register(authRoutes(ctx));
+      await api.register(settingsRoutes(ctx));
+      await api.register(usersRoutes(ctx));
     },
     { prefix: '/api' },
   );
