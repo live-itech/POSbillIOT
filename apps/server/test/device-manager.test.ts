@@ -107,4 +107,10 @@ describe('DeviceManager', () => {
     bus.emit('board.changed');
     await vi.waitFor(() => expect(sim.snapshot()[2]).toBe(true));
   });
+
+  it('applyUnit tidak pernah reject walau query DB gagal', async () => {
+    const spy = vi.spyOn(prisma.unit, 'findUnique').mockRejectedValueOnce(new Error('db down'));
+    await expect(manager.applyUnit(basics.m1.id)).resolves.toBeUndefined();
+    spy.mockRestore();
+  });
 });

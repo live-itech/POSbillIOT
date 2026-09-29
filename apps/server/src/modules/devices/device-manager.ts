@@ -88,9 +88,18 @@ export class DeviceManager {
     return this.entries.get(deviceId)?.driver.isOnline() ?? false;
   }
 
+  /**
+   * Tidak pernah reject — dipanggil fire-and-forget (`void ctx.devices.applyUnit(id)`) oleh rute dan
+   * (nantinya) sesi/scheduler. Error transient (DB turun, shutdown) di-log, bukan jadi unhandled
+   * rejection yang bisa merusak proses server.
+   */
   async applyUnit(unitId: string): Promise<void> {
-    const unit = await this.deps.prisma.unit.findUnique({ where: { id: unitId }, select: { deviceId: true } });
-    if (unit?.deviceId) await this.reconcile(unit.deviceId);
+    try {
+      const unit = await this.deps.prisma.unit.findUnique({ where: { id: unitId }, select: { deviceId: true } });
+      if (unit?.deviceId) await this.reconcile(unit.deviceId);
+    } catch (err) {
+      this.deps.log.warn({ err, unitId }, 'applyUnit gagal');
+    }
   }
 
   async reconcileAll(): Promise<void> {
@@ -143,6 +152,9 @@ export class DeviceManager {
     if (!e) return;
     this.entries.delete(deviceId);
     e.driver.removeAllListeners();
+    // e.queue tidak pernah reject (reconcile() menangkapnya sendiri); tunggu rekonsiliasi yang
+    // sedang berjalan selesai dulu supaya tidak ada pekerjaan in-flight setelah detach()/stop().
+    await e.queue;
     await e.driver.stop().catch(() => undefined);
   }
 
@@ -227,6 +239,9 @@ export class DeviceManager {
         await this.flagUnexpected(e, p);
         if (!settings.autoOffUnexpected) continue;
       }
+      // Device bisa terputus di tengah loop (mis. saat menunggu flagUnexpected / channel
+      // sebelumnya). Lewati send() agar tidak menghasilkan N baris FAIL + alert beruntun.
+      if (!e.driver.isOnline()) continue;
       await this.send(e, p);
     }
   }

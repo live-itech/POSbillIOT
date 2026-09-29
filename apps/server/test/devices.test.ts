@@ -79,6 +79,16 @@ describe('simulate', () => {
     const no = await t.app.inject({ method: 'POST', url: `/api/devices/${b.device.id}/simulate`, headers: { cookie: kasir }, payload: { action: 'online', online: false } });
     expect(no.statusCode).toBe(403);
   });
+
+  it('channel di luar jangkauan device → 400 CHANNEL_OUT_OF_RANGE', async () => {
+    const sup = await loginAs(t.app, 'supervisor');
+    const res = await t.app.inject({
+      method: 'POST', url: `/api/devices/${b.device.id}/simulate`, headers: { cookie: sup },
+      payload: { action: 'set', channel: 99, on: true },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.code).toBe('CHANNEL_OUT_OF_RANGE');
+  });
 });
 
 describe('GET /api/board', () => {

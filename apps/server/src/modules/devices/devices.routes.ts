@@ -104,8 +104,14 @@ export function devicesRoutes(ctx: AppContext): FastifyPluginAsync {
       const b = simulateSchema.parse(req.body);
       const driver = ctx.devices.getDriver(id);
       if (!(driver instanceof SimulatorDriver)) throw badRequest('NOT_SIMULATOR', 'Device ini bukan simulator');
-      if (b.action === 'set') driver.physicalSet(b.channel, b.on);
-      else driver.setOnline(b.online);
+      if (b.action === 'set') {
+        if (b.channel > driver.channels) {
+          throw badRequest('CHANNEL_OUT_OF_RANGE', `Channel relay harus 1–${driver.channels}`);
+        }
+        driver.physicalSet(b.channel, b.on);
+      } else {
+        driver.setOnline(b.online);
+      }
       return reply.status(204).send();
     });
   };
