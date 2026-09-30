@@ -1,8 +1,12 @@
+import { useEffect } from 'react';
 import { LayoutGrid, LogOut, Moon, Settings } from 'lucide-react';
 import { NavLink, Outlet } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { cn } from '../../lib/cn';
+import { beep } from '../../lib/beep';
+import { connectBoard } from '../../lib/socket';
 import { toggleTheme } from '../../lib/theme';
+import { toast } from '../../stores/toast';
 import { useLogout, useMe } from '../auth/auth';
 
 const ROLE_LABEL = { KASIR: 'Kasir', SUPERVISOR: 'Supervisor', OWNER: 'Owner' } as const;
@@ -10,6 +14,16 @@ const ROLE_LABEL = { KASIR: 'Kasir', SUPERVISOR: 'Supervisor', OWNER: 'Owner' } 
 export function AppShell() {
   const me = useMe().data!;
   const logout = useLogout();
+  useEffect(
+    () =>
+      connectBoard((a) => {
+        beep(a.level);
+        if (a.level === 'danger') toast.error(a.message);
+        else if (a.level === 'warning') toast.warning(a.message);
+        else toast.info(a.message);
+      }),
+    [],
+  );
   const items = [
     { to: '/', label: 'Meja', icon: LayoutGrid, show: true },
     { to: '/settings', label: 'Pengaturan', icon: Settings, show: me.role === 'OWNER' },
