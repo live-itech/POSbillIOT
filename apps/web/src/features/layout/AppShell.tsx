@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { LayoutGrid, LogOut, Moon, Settings } from 'lucide-react';
 import { NavLink, Outlet } from 'react-router';
@@ -14,15 +15,20 @@ const ROLE_LABEL = { KASIR: 'Kasir', SUPERVISOR: 'Supervisor', OWNER: 'Owner' } 
 export function AppShell() {
   const me = useMe().data!;
   const logout = useLogout();
+  const qc = useQueryClient();
   useEffect(
     () =>
-      connectBoard((a) => {
-        beep(a.level);
-        if (a.level === 'danger') toast.error(a.message);
-        else if (a.level === 'warning') toast.warning(a.message);
-        else toast.info(a.message);
-      }),
-    [],
+      connectBoard(
+        (a) => {
+          beep(a.level);
+          if (a.level === 'danger') toast.error(a.message);
+          else if (a.level === 'warning') toast.warning(a.message);
+          else toast.info(a.message);
+        },
+        // Sesi kedaluwarsa: cek ulang auth agar RequireAuth mengarahkan ke login.
+        () => void qc.invalidateQueries({ queryKey: ['me'] }),
+      ),
+    [qc],
   );
   const items = [
     { to: '/', label: 'Meja', icon: LayoutGrid, show: true },
