@@ -25,6 +25,11 @@ export function rethrowBusy(err: unknown, unitName: string): never {
   throw err;
 }
 
+/** Kunci baris sesi (SELECT ... FOR UPDATE) agar mutasi bersamaan berjalan berurutan. */
+async function lockSession(tx: Db, sessionId: string): Promise<void> {
+  await tx.$queryRaw`SELECT id FROM "Session" WHERE id = ${sessionId} FOR UPDATE`;
+}
+
 export const sessionParts = { segments: { orderBy: { startedAt: 'asc' } }, pauses: { orderBy: { pausedAt: 'asc' } } } satisfies Prisma.SessionInclude;
 
 export class SessionService {
@@ -97,6 +102,7 @@ export class SessionService {
     const settings = await getSettings(prisma);
 
     const result = await prisma.$transaction(async (tx) => {
+      await lockSession(tx, sessionId);
       const s = await tx.session.findUnique({ where: { id: sessionId }, include: sessionParts });
       if (!s) throw notFound('Sesi');
       if (s.status === 'ENDED') throw conflict('SESSION_ENDED', 'Sesi sudah selesai');
@@ -128,6 +134,7 @@ export class SessionService {
   }
 
   private async loadForUpdate(tx: Db, sessionId: string) {
+    await lockSession(tx, sessionId);
     const s = await tx.session.findUnique({ where: { id: sessionId } });
     if (!s) throw notFound('Sesi');
     if (s.status === 'ENDED') throw conflict('SESSION_ENDED', 'Sesi sudah selesai');
@@ -135,35 +142,53 @@ export class SessionService {
   }
 
   async extend(user: PublicUser, sessionId: string, input: { minutes: number; requestId: string }): Promise<Session> {
-    const { prisma, clock } = this.ctx;
-    const now = clock.now();
-    const session = await prisma.$transaction(async (tx) => {
-      const dup = await tx.sessionExtension.findUnique({ where: { requestId: input.requestId } });
-      if (dup) return tx.session.findUniqueOrThrow({ where: { id: dup.sessionId } });
-
-      const s = await this.loadForUpdate(tx, sessionId);
-      if (s.mode === 'OPEN' || !s.plannedEndAt) throw badRequest('EXTEND_OPEN', 'Sesi open billing tidak perlu tambah waktu');
-      await tx.sessionExtension.create({ data: { sessionId: s.id, minutes: input.minutes, requestId: input.requestId, createdById: user.id } });
-
-      let updated: Session;
-      if (s.status === 'EXPIRED') {
-        const unit = await tx.unit.findUniqueOrThrow({ where: { id: s.unitId } });
-        await tx.sessionSegment.create({ data: { sessionId: s.id, unitId: unit.id, unitTypeId: unit.unitTypeId, startedAt: now } });
-        updated = await tx.session.update({
-          where: { id: s.id },
-          data: { status: 'RUNNING', endedAt: null, warnedAt: null, plannedEndAt: addMinutes(now, input.minutes) },
-        });
-      } else {
-        updated = await tx.session.update({
-          where: { id: s.id },
-          data: { plannedEndAt: addMinutes(s.plannedEndAt, input.minutes), warnedAt: null },
-        });
-      }
-      await audit(tx, { userId: user.id, action: 'session.extend', entity: 'Session', entityId: s.id, data: { minutes: input.minutes } });
-      return updated;
-    });
+    const { prisma } = this.ctx;
+    const existing = async (db: Db) => {
+      const dup = await db.sessionExtension.findUnique({ where: { requestId: input.requestId } });
+      if (!dup) return null;
+      if (dup.sessionId !== sessionId) throw conflict('REQUEST_ID_USED', 'ID permintaan sudah dipakai untuk sesi lain');
+      return db.session.findUniqueOrThrow({ where: { id: dup.sessionId } });
+    };
+    let session: Session;
+    try {
+      session = await prisma.$transaction(async (tx) => {
+        const dupFirst = await existing(tx);
+        if (dupFirst) return dupFirst;
+        const s = await this.loadForUpdate(tx, sessionId);
+        const dup = await existing(tx); // ulangi setelah kunci: permintaan lain mungkin baru selesai
+        if (dup) return dup;
+        return this.applyExtend(tx, user, s, input);
+      });
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002' && String(err.meta?.target ?? '').includes('requestId')) {
+        session = (await existing(prisma))!;
+      } else throw err;
+    }
     this.touch(session.unitId);
     return session;
+  }
+
+  private async applyExtend(tx: Db, user: PublicUser, s: Session, input: { minutes: number; requestId: string }): Promise<Session> {
+    const now = this.ctx.clock.now();
+    if (s.mode === 'OPEN' || !s.plannedEndAt) throw badRequest('EXTEND_OPEN', 'Sesi open billing tidak perlu tambah waktu');
+    await tx.sessionExtension.create({ data: { sessionId: s.id, minutes: input.minutes, requestId: input.requestId, createdById: user.id } });
+
+    let updated: Session;
+    if (s.status === 'EXPIRED') {
+      const unit = await tx.unit.findUniqueOrThrow({ where: { id: s.unitId } });
+      await tx.sessionSegment.create({ data: { sessionId: s.id, unitId: unit.id, unitTypeId: unit.unitTypeId, startedAt: now } });
+      updated = await tx.session.update({
+        where: { id: s.id },
+        data: { status: 'RUNNING', endedAt: null, warnedAt: null, plannedEndAt: addMinutes(now, input.minutes) },
+      });
+    } else {
+      updated = await tx.session.update({
+        where: { id: s.id },
+        data: { plannedEndAt: addMinutes(s.plannedEndAt, input.minutes), warnedAt: null },
+      });
+    }
+    await audit(tx, { userId: user.id, action: 'session.extend', entity: 'Session', entityId: s.id, data: { minutes: input.minutes } });
+    return updated;
   }
 
   async move(user: PublicUser, sessionId: string, toUnitId: string): Promise<{ from: string; to: string }> {

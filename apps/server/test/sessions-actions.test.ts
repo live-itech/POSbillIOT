@@ -101,3 +101,38 @@ describe('pindah meja', () => {
     expect((await post(`/api/sessions/${s.id}/move`, { toUnitId: b.m1.id })).json().error.code).toBe('SAME_UNIT');
   });
 });
+
+describe('konkurensi', () => {
+  it('pause ganda bersamaan: satu 200, satu 409, satu baris pause terbuka', async () => {
+    const s = await startPkg();
+    const rs = await Promise.all([1, 2].map(() => post(`/api/sessions/${s.id}/pause`, { approvalPin: '1111' })));
+    expect(rs.map((r) => r.statusCode).sort()).toEqual([200, 409]);
+    expect(await prisma.sessionPause.count({ where: { sessionId: s.id, resumedAt: null } })).toBe(1);
+  });
+
+  it('stop ganda bersamaan: satu 200, satu 409, satu audit session.stop', async () => {
+    const s = await startOpen();
+    t.clock.advanceMinutes(30);
+    const rs = await Promise.all([1, 2].map(() => post(`/api/sessions/${s.id}/stop`)));
+    expect(rs.map((r) => r.statusCode).sort()).toEqual([200, 409]);
+    expect(await prisma.auditLog.count({ where: { action: 'session.stop' } })).toBe(1);
+  });
+
+  it('extend bersamaan dengan requestId sama: tidak ada 500, satu baris extension', async () => {
+    const s = await startPkg();
+    const body = { minutes: 30, requestId: 'req-concurrent-1' };
+    const rs = await Promise.all([1, 2].map(() => post(`/api/sessions/${s.id}/extend`, body)));
+    expect(rs.map((r) => r.statusCode)).toEqual([200, 200]);
+    expect(await prisma.sessionExtension.count()).toBe(1);
+  });
+
+  it('extend dengan requestId milik sesi lain → 409', async () => {
+    const s1 = await startPkg(b.m1.id);
+    const s2 = await startPkg(b.m2.id);
+    const body = { minutes: 30, requestId: 'req-shared-0001' };
+    expect((await post(`/api/sessions/${s1.id}/extend`, body)).statusCode).toBe(200);
+    const res = await post(`/api/sessions/${s2.id}/extend`, body);
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.code).toBe('REQUEST_ID_USED');
+  });
+});
