@@ -4,6 +4,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { useNow } from '../../hooks/useNow';
 import { cn } from '../../lib/cn';
 import { useBoard } from '../../stores/board';
+import { SimulatorPanel } from './SimulatorPanel';
 import { UnitCard } from './UnitCard';
 import { UnitPanel } from './UnitPanel';
 
@@ -48,6 +49,7 @@ export function BoardPage() {
         </section>
         <UnitPanel />
       </div>
+      <SimulatorPanel />
     </div>
   );
 }
