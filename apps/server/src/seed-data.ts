@@ -52,29 +52,36 @@ const PLAYSTATION: TypeSeed[] = [
 export async function seedDemo(prisma: PrismaClient, outletType: OutletType): Promise<boolean> {
   if ((await prisma.user.count()) > 0) return false;
 
-  await prisma.setting.upsert({ where: { id: 1 }, create: { id: 1, outletType }, update: { outletType } });
+  const users = await Promise.all(
+    [
+      { name: 'Owner', username: 'owner', password: 'owner123', pin: '1234', role: 'OWNER' as const },
+      { name: 'Supervisor', username: 'supervisor', password: 'super123', pin: '1111', role: 'SUPERVISOR' as const },
+      { name: 'Kasir', username: 'kasir', password: 'kasir123', pin: null, role: 'KASIR' as const },
+    ].map(async (u) => ({
+      name: u.name,
+      username: u.username,
+      role: u.role,
+      passwordHash: await hashSecret(u.password),
+      pinHash: u.pin ? await hashSecret(u.pin) : null,
+    })),
+  );
 
-  const users = [
-    { name: 'Owner', username: 'owner', password: 'owner123', pin: '1234', role: 'OWNER' as const },
-    { name: 'Supervisor', username: 'supervisor', password: 'super123', pin: '1111', role: 'SUPERVISOR' as const },
-    { name: 'Kasir', username: 'kasir', password: 'kasir123', pin: null, role: 'KASIR' as const },
-  ];
-  for (const u of users) {
-    await prisma.user.create({
-      data: { name: u.name, username: u.username, role: u.role, passwordHash: await hashSecret(u.password), pinHash: u.pin ? await hashSecret(u.pin) : null },
-    });
-  }
+  return prisma.$transaction(async (tx) => {
+    if ((await tx.user.count()) > 0) return false;
+    await tx.setting.upsert({ where: { id: 1 }, create: { id: 1, outletType }, update: { outletType } });
+    for (const data of users) await tx.user.create({ data });
 
-  const device = await prisma.device.create({ data: { name: 'Simulator Relay A', driver: 'simulator', channels: 8 } });
-  let channel = 1;
-  for (const t of outletType === 'PLAYSTATION' ? PLAYSTATION : BILLIARD) {
-    const type = await prisma.unitType.create({ data: { name: t.name, color: t.color } });
-    await prisma.tariff.createMany({ data: t.tariffs.map((x) => ({ ...x, unitTypeId: type.id })) });
-    await prisma.package.createMany({ data: t.packages.map((x) => ({ ...x, unitTypeId: type.id })) });
-    for (const name of t.units) {
-      await prisma.unit.create({ data: { name, unitTypeId: type.id, deviceId: device.id, relayChannel: channel, sortOrder: channel } });
-      channel++;
+    const device = await tx.device.create({ data: { name: 'Simulator Relay A', driver: 'simulator', channels: 8 } });
+    let channel = 1;
+    for (const t of outletType === 'PLAYSTATION' ? PLAYSTATION : BILLIARD) {
+      const type = await tx.unitType.create({ data: { name: t.name, color: t.color } });
+      await tx.tariff.createMany({ data: t.tariffs.map((x) => ({ ...x, unitTypeId: type.id })) });
+      await tx.package.createMany({ data: t.packages.map((x) => ({ ...x, unitTypeId: type.id })) });
+      for (const name of t.units) {
+        await tx.unit.create({ data: { name, unitTypeId: type.id, deviceId: device.id, relayChannel: channel, sortOrder: channel } });
+        channel++;
+      }
     }
-  }
-  return true;
+    return true;
+  });
 }
