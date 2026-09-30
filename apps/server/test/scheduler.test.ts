@@ -80,6 +80,21 @@ describe('Scheduler.tick', () => {
     expect((await prisma.session.findUniqueOrThrow({ where: { id: s.id } })).status).toBe('RUNNING');
     expect(alerts.map((a) => a.type)).not.toContain('SESSION_EXPIRED');
   });
+
+  it('kegagalan satu sesi tidak menghentikan sesi lain dalam tick yang sama', async () => {
+    await post('/api/sessions', { unitId: b.m1.id, mode: 'PACKAGE', packageId: b.pkg1.id });
+    await post('/api/sessions', { unitId: b.m2.id, mode: 'PACKAGE', packageId: b.pkg1.id });
+    t.clock.advanceMinutes(61);
+    const spy = vi.spyOn(t.ctx.scheduler as unknown as { expire: () => Promise<void> }, 'expire').mockRejectedValueOnce(new Error('boom'));
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await t.ctx.scheduler.tick();
+    expect(await prisma.session.count({ where: { status: 'EXPIRED' } })).toBe(1);
+    expect(err).toHaveBeenCalled();
+    spy.mockRestore();
+    err.mockRestore();
+    await t.ctx.scheduler.tick();
+    expect(await prisma.session.count({ where: { status: 'EXPIRED' } })).toBe(2);
+  });
 });
 
 describe('restart recovery', () => {

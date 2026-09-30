@@ -22,8 +22,13 @@ export function attachRealtime(app: FastifyInstance, ctx: AppContext): Server {
   });
 
   io.on('connection', async (socket) => {
-    await socket.join('board');
-    socket.emit('board', await buildBoard(ctx));
+    try {
+      await socket.join('board');
+      socket.emit('board', await buildBoard(ctx));
+    } catch (err) {
+      app.log.warn({ err }, 'realtime: gagal mengirim board saat connect');
+      socket.disconnect(true);
+    }
   });
 
   const room = () => io.to('board');

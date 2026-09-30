@@ -40,23 +40,36 @@ export class Scheduler {
     });
 
     for (const s of sessions) {
-      const end = s.plannedEndAt!;
-      if (now.getTime() >= end.getTime()) {
-        await this.expire(s.id, s.unit.id, s.unit.name, end);
-        continue;
+      try {
+        await this.process(s, now, settings.warnBeforeMin);
+      } catch (err) {
+        console.error(`[scheduler] sesi ${s.id} gagal diproses`, err);
       }
-      const leftMs = end.getTime() - now.getTime();
-      if (!s.warnedAt && leftMs <= settings.warnBeforeMin * 60_000) {
-        const w = await prisma.session.updateMany({ where: { id: s.id, plannedEndAt: end, warnedAt: null }, data: { warnedAt: now } });
-        if (w.count > 0) {
-          emitAlert(bus, clock, {
-            level: 'warning',
-            type: 'SESSION_WARNING',
-            unitId: s.unit.id,
-            message: `${s.unit.name}: sisa waktu ${Math.ceil(leftMs / 60_000)} menit`,
-          });
-          bus.emit('unit.changed', s.unit.id);
-        }
+    }
+  }
+
+  private async process(
+    s: { id: string; plannedEndAt: Date | null; warnedAt: Date | null; unit: { id: string; name: string } },
+    now: Date,
+    warnBeforeMin: number,
+  ): Promise<void> {
+    const { prisma, clock, bus } = this.ctx;
+    const end = s.plannedEndAt!;
+    if (now.getTime() >= end.getTime()) {
+      await this.expire(s.id, s.unit.id, s.unit.name, end);
+      return;
+    }
+    const leftMs = end.getTime() - now.getTime();
+    if (!s.warnedAt && leftMs <= warnBeforeMin * 60_000) {
+      const w = await prisma.session.updateMany({ where: { id: s.id, plannedEndAt: end, warnedAt: null }, data: { warnedAt: now } });
+      if (w.count > 0) {
+        emitAlert(bus, clock, {
+          level: 'warning',
+          type: 'SESSION_WARNING',
+          unitId: s.unit.id,
+          message: `${s.unit.name}: sisa waktu ${Math.ceil(leftMs / 60_000)} menit`,
+        });
+        bus.emit('unit.changed', s.unit.id);
       }
     }
   }

@@ -1,6 +1,6 @@
 import type { BoardSnapshot, UnitView } from '@funplay/shared';
 import { io, type Socket } from 'socket.io-client';
-import { afterEach, beforeEach, expect, it } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { loginAs, makeApp, resetDb, seedBasics, seedUsers } from './helpers';
 
 let t: Awaited<ReturnType<typeof makeApp>>;
@@ -55,4 +55,26 @@ it('menolak koneksi tanpa login', async () => {
   const s = connect();
   const err = await new Promise<Error>((resolve) => s.once('connect_error', resolve));
   expect(err.message).toBe('UNAUTHORIZED');
+});
+
+it('kegagalan buildBoard saat connect memutus socket tanpa unhandled rejection; koneksi berikutnya tetap jalan', async () => {
+  const cookie = await loginAs(t.app, 'kasir');
+  const unhandled: unknown[] = [];
+  const onUnhandled = (e: unknown) => unhandled.push(e);
+  process.on('unhandledRejection', onUnhandled);
+  const spy = vi.spyOn(t.ctx.devices, 'status').mockImplementationOnce(() => {
+    throw new Error('db down');
+  });
+  try {
+    const s1 = connect(cookie);
+    await new Promise((resolve) => s1.once('disconnect', resolve));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(unhandled).toHaveLength(0);
+    const s2 = connect(cookie);
+    const board = await new Promise<BoardSnapshot>((resolve) => s2.once('board', resolve));
+    expect(board.units).toHaveLength(3);
+  } finally {
+    process.off('unhandledRejection', onUnhandled);
+    spy.mockRestore();
+  }
 });
