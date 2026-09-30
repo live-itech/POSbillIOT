@@ -13,7 +13,10 @@ export const usePin = create<PinState>((set, get) => ({
   open: false,
   title: '',
   resolve: null,
-  ask: (title) => new Promise((resolve) => set({ open: true, title, resolve })),
+  ask: (title) => {
+    get().resolve?.(null); // selesaikan prompt lama agar promise-nya tidak menggantung
+    return new Promise((resolve) => set({ open: true, title, resolve }));
+  },
   close: (pin) => {
     get().resolve?.(pin);
     set({ open: false, resolve: null });

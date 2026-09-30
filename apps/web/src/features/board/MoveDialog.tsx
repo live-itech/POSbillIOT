@@ -18,12 +18,15 @@ export function MoveDialog({ sessionId, fromUnitId, open, onClose }: { sessionId
             key={u.id}
             type="button"
             disabled={action.isPending}
-            onClick={() =>
-              action.mutate(
-                { path: `/sessions/${sessionId}/move`, body: { toUnitId: u.id } },
-                { onSuccess: () => { toast.success(`Dipindah ke ${u.name}`); onClose(); } },
-              )
-            }
+            onClick={async () => {
+              try {
+                await action.mutateAsync({ path: `/sessions/${sessionId}/move`, body: { toUnitId: u.id } });
+                toast.success(`Dipindah ke ${u.name}`);
+                onClose();
+              } catch {
+                // error sudah ditampilkan oleh hook (showError)
+              }
+            }}
             className="rounded-xl border-2 border-line p-3 text-left font-semibold hover:border-primary"
           >
             {u.name}

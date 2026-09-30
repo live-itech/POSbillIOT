@@ -1,9 +1,10 @@
 import type { UnitView } from '@funplay/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { useBoard } from '../../stores/board';
+import { PinPrompt } from '../../components/PinPrompt';
 import { UnitPanel } from './UnitPanel';
 
 const idle: UnitView = {
@@ -59,4 +60,68 @@ it('tombol Mulai nonaktif sampai paket dipilih', async () => {
   );
   await userEvent.click(screen.getByRole('button', { name: 'Paket' }));
   expect(screen.getByRole('button', { name: 'Mulai' })).toBeDisabled();
+});
+
+const running = (id: string, unitTypeId = 'reg'): UnitView => ({
+  ...idle,
+  id,
+  unitTypeId,
+  session: {
+    id: 's1', billId: 'b1', mode: 'OPEN', status: 'RUNNING', startedAt: new Date().toISOString(), plannedEndAt: null, endedAt: null,
+    packageName: null, packageDurationMin: null, packagePrice: null, segments: [{ unitId: id, unitTypeId, startedAt: new Date().toISOString(), endedAt: null }], pauses: [],
+  },
+});
+
+it('berganti meja mereset pilihan paket di StartSession', async () => {
+  const fetchMock = mockFetch();
+  vi.stubGlobal('fetch', fetchMock);
+  const other: UnitView = { ...idle, id: 'u2', name: 'VIP 1', unitTypeId: 'vip' };
+  useBoard.setState({ units: { u1: idle, u2: other }, order: ['u1', 'u2'] });
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <UnitPanel />
+    </QueryClientProvider>,
+  );
+  await userEvent.click(screen.getByRole('button', { name: 'Paket' }));
+  await userEvent.click(await screen.findByRole('button', { name: /Paket 2 Jam/ }));
+  expect(screen.getByRole('button', { name: 'Mulai' })).toBeEnabled();
+  act(() => useBoard.getState().select('u2'));
+  expect(screen.getByRole('button', { name: 'Open billing' })).toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', { name: 'Paket' }));
+  expect(screen.getByRole('button', { name: 'Mulai' })).toBeDisabled();
+});
+
+function renderRunning() {
+  const fetchMock = mockFetch();
+  vi.stubGlobal('fetch', fetchMock);
+  useBoard.setState({ units: { u1: running('u1') } });
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <UnitPanel />
+      <PinPrompt />
+    </QueryClientProvider>,
+  );
+  return fetchMock;
+}
+
+it('pause oleh KASIR memakai PIN supervisor', async () => {
+  const fetchMock = renderRunning();
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/auth/me', expect.anything()));
+  await screen.findByRole('button', { name: 'Pause' });
+  await userEvent.click(screen.getByRole('button', { name: 'Pause' }));
+  await userEvent.type(await screen.findByLabelText('PIN supervisor'), '1111');
+  await userEvent.click(screen.getByRole('button', { name: 'Konfirmasi' }));
+  await waitFor(() => {
+    const call = fetchMock.mock.calls.find(([u]) => u === '/api/sessions/s1/pause');
+    expect(call).toBeDefined();
+    expect(JSON.parse(String(call![1]!.body))).toEqual({ approvalPin: '1111' });
+  });
+});
+
+it('batal di prompt PIN tidak mengirim request pause', async () => {
+  const fetchMock = renderRunning();
+  await userEvent.click(await screen.findByRole('button', { name: 'Pause' }));
+  await userEvent.click(await screen.findByRole('button', { name: 'Batal' }));
+  await waitFor(() => expect(screen.queryByLabelText('PIN supervisor')).not.toBeInTheDocument());
+  expect(fetchMock.mock.calls.some(([u]) => String(u).includes('/pause'))).toBe(false);
 });

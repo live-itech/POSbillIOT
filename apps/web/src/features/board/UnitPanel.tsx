@@ -26,8 +26,8 @@ export function UnitPanel() {
         <span className={`rounded-full px-3 py-1 text-xs font-bold ${STATUS_STYLE[status].card}`}>{STATUS_STYLE[status].label}</span>
       </header>
       {status === 'MAINTENANCE' && <p className="rounded-xl bg-gray-100 p-3 text-sm text-gray-700">Sedang maintenance — tidak bisa dipakai.</p>}
-      {status === 'IDLE' && <StartSession unit={unit} />}
-      {unit.session && <ActiveSession unit={unit} session={unit.session} status={status} now={now} />}
+      {status === 'IDLE' && <StartSession key={unit.id} unit={unit} />}
+      {unit.session && <ActiveSession key={unit.id} unit={unit} session={unit.session} status={status} now={now} />}
     </aside>
   );
 }

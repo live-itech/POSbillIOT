@@ -15,11 +15,14 @@ export function StartSession({ unit }: { unit: UnitView }) {
   const list = (packages.data ?? []).filter((p) => p.active && p.unitTypeId === unit.unitTypeId);
   const action = useSessionAction();
 
-  const start = () =>
-    action.mutate(
-      { path: '/sessions', body: { unitId: unit.id, mode, ...(mode === 'PACKAGE' && packageId ? { packageId } : {}) } },
-      { onSuccess: () => toast.success(`${unit.name} dimulai`) },
-    );
+  const start = async () => {
+    try {
+      await action.mutateAsync({ path: '/sessions', body: { unitId: unit.id, mode, ...(mode === 'PACKAGE' && packageId ? { packageId } : {}) } });
+      toast.success(`${unit.name} dimulai`);
+    } catch {
+      // error sudah ditampilkan oleh hook (showError)
+    }
+  };
 
   return (
     <div className="flex flex-col gap-3">
