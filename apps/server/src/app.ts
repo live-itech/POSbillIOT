@@ -15,6 +15,7 @@ import { unitsRoutes } from './modules/catalog/units.routes';
 import { DeviceManager } from './modules/devices/device-manager';
 import { devicesRoutes } from './modules/devices/devices.routes';
 import { createDefaultDriverFactory, type DriverFactory } from './modules/devices/driver';
+import { Scheduler } from './modules/scheduler/scheduler';
 import { sessionsRoutes } from './modules/sessions/sessions.routes';
 import { SessionService } from './modules/sessions/sessions.service';
 import { settingsRoutes } from './modules/settings/settings.routes';
@@ -42,6 +43,7 @@ export async function buildApp(deps: BuildAppDeps) {
   });
   const ctx = { prisma: deps.prisma, clock: deps.clock, config: deps.config, bus, devices } as AppContext;
   ctx.sessions = new SessionService(ctx);
+  ctx.scheduler = new Scheduler(ctx);
 
   registerErrorHandler(app);
   await app.register(cookie, { secret: deps.config.COOKIE_SECRET });
@@ -64,7 +66,12 @@ export async function buildApp(deps: BuildAppDeps) {
   );
 
   await devices.start({ loop: startLoops });
+  if (startLoops) {
+    await ctx.scheduler.tick(); // pemulihan: expire paket yang lewat selama server mati
+    ctx.scheduler.start();
+  }
   app.addHook('onClose', async () => {
+    ctx.scheduler.stop();
     await devices.stop();
   });
 
