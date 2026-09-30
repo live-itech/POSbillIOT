@@ -1,4 +1,5 @@
 import { Route, Routes } from 'react-router';
+import { PinPrompt } from './components/PinPrompt';
 import { Toaster } from './components/Toaster';
 import { RequireAuth } from './features/auth/auth';
 import { BoardPage } from './features/board/BoardPage';
@@ -21,6 +22,7 @@ export function App() {
         </Route>
       </Routes>
       <Toaster />
+      <PinPrompt />
     </>
   );
 }

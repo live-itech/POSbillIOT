@@ -5,10 +5,7 @@ import { useNow } from '../../hooks/useNow';
 import { cn } from '../../lib/cn';
 import { useBoard } from '../../stores/board';
 import { UnitCard } from './UnitCard';
-
-function UnitPanelSlot() {
-  return <aside className="rounded-2xl bg-surface p-4 text-sm text-muted shadow-sm">Pilih meja di sebelah kiri.</aside>;
-}
+import { UnitPanel } from './UnitPanel';
 
 export function BoardPage() {
   const { order, units, settings, connected, selectedUnitId, select } = useBoard(
@@ -49,7 +46,7 @@ export function BoardPage() {
             ))}
           </div>
         </section>
-        <UnitPanelSlot />
+        <UnitPanel />
       </div>
     </div>
   );
