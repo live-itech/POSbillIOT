@@ -15,6 +15,7 @@ import { unitsRoutes } from './modules/catalog/units.routes';
 import { DeviceManager } from './modules/devices/device-manager';
 import { devicesRoutes } from './modules/devices/devices.routes';
 import { createDefaultDriverFactory, type DriverFactory } from './modules/devices/driver';
+import { attachRealtime } from './modules/realtime/realtime';
 import { Scheduler } from './modules/scheduler/scheduler';
 import { sessionsRoutes } from './modules/sessions/sessions.routes';
 import { SessionService } from './modules/sessions/sessions.service';
@@ -64,6 +65,8 @@ export async function buildApp(deps: BuildAppDeps) {
     },
     { prefix: '/api' },
   );
+
+  attachRealtime(app, ctx);
 
   await devices.start({ loop: startLoops });
   if (startLoops) {
