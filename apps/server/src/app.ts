@@ -1,4 +1,5 @@
 import cookie from '@fastify/cookie';
+import fastifyStatic from '@fastify/static';
 import type { PrismaClient } from '@prisma/client';
 import Fastify from 'fastify';
 import type { Config } from './config';
@@ -65,6 +66,16 @@ export async function buildApp(deps: BuildAppDeps) {
     },
     { prefix: '/api' },
   );
+
+  if (deps.config.WEB_DIST) {
+    await app.register(fastifyStatic, { root: deps.config.WEB_DIST, wildcard: false });
+  }
+  app.setNotFoundHandler((req, reply) => {
+    if (!deps.config.WEB_DIST || req.url.startsWith('/api') || req.url.startsWith('/socket.io')) {
+      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Tidak ditemukan' } });
+    }
+    return reply.sendFile('index.html');
+  });
 
   attachRealtime(app, ctx);
 
