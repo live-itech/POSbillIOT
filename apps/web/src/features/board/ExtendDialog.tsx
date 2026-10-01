@@ -7,9 +7,20 @@ import { useSessionAction } from './actions';
 
 export function ExtendDialog({ sessionId, open, onClose }: { sessionId: string; open: boolean; onClose: () => void }) {
   const [minutes, setMinutes] = useState(30);
-  const requestId = useMemo(() => newId(), [open]); // satu requestId per pembukaan dialog → klik ganda tidak dobel
+  // Satu requestId per (pembukaan dialog, jumlah menit): klik ganda / coba ulang menit yang sama tidak
+  // dobel, sedangkan mengganti menit setelah gagal menjadi permintaan baru.
+  const requestIds = useMemo(() => new Map<number, string>(), [open]);
+  const requestIdFor = (m: number) => {
+    let id = requestIds.get(m);
+    if (!id) {
+      id = newId();
+      requestIds.set(m, id);
+    }
+    return id;
+  };
   const action = useSessionAction();
-  const submit = () => action.mutate({ path: `/sessions/${sessionId}/extend`, body: { minutes, requestId } }, { onSuccess: onClose });
+  const submit = () =>
+    action.mutate({ path: `/sessions/${sessionId}/extend`, body: { minutes, requestId: requestIdFor(minutes) } }, { onSuccess: onClose });
 
   return (
     <Modal
