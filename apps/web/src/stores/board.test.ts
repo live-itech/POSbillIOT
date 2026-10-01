@@ -50,4 +50,20 @@ describe('useBoard', () => {
     useBoard.getState().applyBoard(snapshot([unit('b', 'Meja 2', 2)]), Date.now());
     expect(useBoard.getState().selectedUnitId).toBeNull();
   });
+
+  it('applyActionUnit tidak menimpa light dari socket tetapi memperbarui field lain', () => {
+    useBoard.getState().applyBoard(snapshot([{ ...unit('a', 'Meja 1', 1), light: false }]), Date.now());
+    useBoard.getState().applyActionUnit({ ...unit('a', 'Meja 1', 1), light: true, lightOverride: true, state: 'MAINTENANCE' });
+    const u = useBoard.getState().units.a!;
+    expect(u.light).toBe(false);
+    expect(u.lightOverride).toBe(true);
+    expect(u.state).toBe('MAINTENANCE');
+  });
+
+  it('applyActionUnit tanpa data sebelumnya memakai light dari respons', () => {
+    useBoard.getState().applyActionUnit({ ...unit('z', 'Meja 9', 9), light: true });
+    const s = useBoard.getState();
+    expect(s.units.z!.light).toBe(true);
+    expect(s.order).toEqual(['z']);
+  });
 });

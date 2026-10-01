@@ -20,7 +20,7 @@ export function LightControl({ unit }: { unit: UnitView }) {
   const m = useMutation({
     mutationFn: (vars: { mode: Mode; reason: string; approvalPin?: string }) =>
       api<{ unit: UnitView }>('POST', `/units/${unit.id}/light`, vars),
-    onSuccess: (r) => useBoard.getState().applyUnit(r.unit),
+    onSuccess: (r) => useBoard.getState().applyActionUnit(r.unit),
     onError: showError,
   });
 
