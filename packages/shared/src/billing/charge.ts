@@ -1,6 +1,6 @@
 import { MS_PER_MIN } from '../time';
 import { dropLeadingMs, totalMs, type BillableInterval } from './intervals';
-import { findTariff, nextBoundary, type TariffRule } from './tariff';
+import { coveringTariff, nearestTariff, nextBoundary, type TariffRule } from './tariff';
 
 export interface RoundingRule {
   blockMin: number;
@@ -21,6 +21,8 @@ export interface ChargeLine {
   pricePerHour: number | null;
   minutes: number;
   amount: number;
+  /** true bila menit-menit ini tidak tercakup tarif mana pun dan dihargai dengan tarif terdekat. */
+  fallback?: true;
 }
 
 export interface TimeCharge {
@@ -28,6 +30,10 @@ export interface TimeCharge {
   chargedMinutes: number;
   total: number;
   lines: ChargeLine[];
+  /** true bila ada potongan yang dihargai dengan tarif terdekat (menit di luar cakupan tarif). */
+  fallback?: true;
+  /** true bila tipe meja sama sekali tidak punya tarif; total waktu tidak bisa dihitung (diisi server). */
+  noTariff?: true;
 }
 
 export interface ComputeTimeChargeInput {
@@ -55,23 +61,48 @@ export function roundUpMinutes(rawMs: number, rule: RoundingRule, applyMinimum: 
 interface Piece {
   rule: TariffRule;
   ms: number;
+  fallback: boolean;
 }
 
+interface RawPiece {
+  unitTypeId: string;
+  at: Date;
+  rule: TariffRule | null;
+  ms: number;
+}
+
+/**
+ * Memecah waktu tertagih per tarif. Menit yang tidak tercakup tarif mana pun dihargai dengan tarif
+ * potongan tercakup terdekat sebelumnya (tipe meja sama); bila tidak ada, potongan sesudahnya; bila
+ * tetap tidak ada, tarif terdekat dalam waktu. Potongan seperti itu ditandai `fallback`.
+ */
 function splitByTariff(intervals: BillableInterval[], tariffs: TariffRule[], utcOffsetMin: number): Piece[] {
-  const pieces: Piece[] = [];
+  const raw: RawPiece[] = [];
   for (const iv of intervals) {
     let cursor = iv.start;
     while (cursor.getTime() < iv.end.getTime()) {
-      const rule = findTariff(tariffs, iv.unitTypeId, cursor, utcOffsetMin);
+      const rule = coveringTariff(tariffs, iv.unitTypeId, cursor, utcOffsetMin);
       const boundary = nextBoundary(tariffs, iv.unitTypeId, cursor, utcOffsetMin);
       const end = boundary.getTime() < iv.end.getTime() ? boundary : iv.end;
-      const ms = end.getTime() - cursor.getTime();
-      const last = pieces[pieces.length - 1];
-      if (last && last.rule.id === rule.id) last.ms += ms;
-      else pieces.push({ rule, ms });
+      raw.push({ unitTypeId: iv.unitTypeId, at: cursor, rule, ms: end.getTime() - cursor.getTime() });
       cursor = end;
     }
   }
+
+  const pieces: Piece[] = [];
+  raw.forEach((p, i) => {
+    let rule = p.rule;
+    const fallback = rule === null;
+    if (!rule) {
+      const sameType = (q: RawPiece) => q.unitTypeId === p.unitTypeId && q.rule !== null;
+      const before = raw.slice(0, i).reverse().find(sameType);
+      const after = raw.slice(i + 1).find(sameType);
+      rule = before?.rule ?? after?.rule ?? nearestTariff(tariffs, p.unitTypeId, p.at, utcOffsetMin);
+    }
+    const last = pieces[pieces.length - 1];
+    if (last && last.rule.id === rule.id && last.fallback === fallback) last.ms += p.ms;
+    else pieces.push({ rule, ms: p.ms, fallback });
+  });
   return pieces;
 }
 
@@ -92,7 +123,10 @@ export function computeTimeCharge(input: ComputeTimeChargeInput): TimeCharge {
 
   if (restCharged > 0) {
     const pieces = splitByTariff(tariffIntervals, tariffs, utcOffsetMin);
-    if (pieces.length === 0) pieces.push({ rule: findTariff(tariffs, anchor.unitTypeId, anchor.at, utcOffsetMin), ms: 0 });
+    if (pieces.length === 0) {
+      const covering = coveringTariff(tariffs, anchor.unitTypeId, anchor.at, utcOffsetMin);
+      pieces.push({ rule: covering ?? nearestTariff(tariffs, anchor.unitTypeId, anchor.at, utcOffsetMin), ms: 0, fallback: covering === null });
+    }
     pieces[pieces.length - 1]!.ms += restCharged * MS_PER_MIN - restMs;
 
     let cum = 0;
@@ -111,6 +145,7 @@ export function computeTimeCharge(input: ComputeTimeChargeInput): TimeCharge {
         pricePerHour: p.rule.pricePerHour,
         minutes,
         amount: Math.round((p.rule.pricePerHour * minutes) / 60),
+        ...(p.fallback ? { fallback: true as const } : {}),
       });
     }
     chargedMinutes += restCharged;
@@ -121,5 +156,6 @@ export function computeTimeCharge(input: ComputeTimeChargeInput): TimeCharge {
     chargedMinutes,
     total: lines.reduce((s, l) => s + l.amount, 0),
     lines,
+    ...(lines.some((l) => l.fallback) ? { fallback: true as const } : {}),
   };
 }

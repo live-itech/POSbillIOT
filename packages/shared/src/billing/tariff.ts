@@ -44,15 +44,42 @@ export function ruleCovers(rule: TariffRule, dow: number, minuteOfDay: number): 
   return has((dow + 6) % 7) && minuteOfDay < rule.endMin;
 }
 
-export function findTariff(rules: TariffRule[], unitTypeId: string, at: Date, utcOffsetMin: number): TariffRule {
+/** Tarif yang berlaku pada `at`, atau null bila tidak ada aturan yang mencakup menit tersebut. */
+export function coveringTariff(rules: TariffRule[], unitTypeId: string, at: Date, utcOffsetMin: number): TariffRule | null {
   const { dow, minuteOfDay } = localParts(at, utcOffsetMin);
-  let best: TariffRule | undefined;
+  let best: TariffRule | null = null;
   for (const r of rules) {
     if (r.unitTypeId !== unitTypeId || !ruleCovers(r, dow, minuteOfDay)) continue;
     if (!best || r.priority > best.priority) best = r;
   }
+  return best;
+}
+
+export function findTariff(rules: TariffRule[], unitTypeId: string, at: Date, utcOffsetMin: number): TariffRule {
+  const best = coveringTariff(rules, unitTypeId, at, utcOffsetMin);
   if (!best) throw new NoTariffError(unitTypeId, at);
   return best;
+}
+
+const SCAN_LIMIT_MIN = 8 * MINUTES_PER_DAY;
+
+/**
+ * Tarif terdekat untuk menit yang tidak tercakup aturan mana pun: tarif yang berlaku paling akhir
+ * sebelum `at`, atau bila tidak ada, yang paling awal sesudahnya. Melempar NoTariffError hanya jika
+ * tipe meja sama sekali tidak punya tarif yang pernah berlaku.
+ */
+export function nearestTariff(rules: TariffRule[], unitTypeId: string, at: Date, utcOffsetMin: number): TariffRule {
+  const covering = coveringTariff(rules, unitTypeId, at, utcOffsetMin);
+  if (covering) return covering;
+  if (rules.some((r) => r.unitTypeId === unitTypeId)) {
+    for (const dir of [-1, 1]) {
+      for (let k = 1; k <= SCAN_LIMIT_MIN; k++) {
+        const r = coveringTariff(rules, unitTypeId, new Date(at.getTime() + dir * k * MS_PER_MIN), utcOffsetMin);
+        if (r) return r;
+      }
+    }
+  }
+  throw new NoTariffError(unitTypeId, at);
 }
 
 /** Instan berikutnya setelah `at` di mana tarif yang berlaku bisa berubah (batas aturan atau tengah malam lokal). */

@@ -114,3 +114,60 @@ describe('computeTimeCharge — paket', () => {
     expect(c.chargedMinutes).toBe(150);
   });
 });
+
+describe('computeTimeCharge — menit tanpa tarif (fallback)', () => {
+  const late: TariffRule = { id: 'reg-late', unitTypeId: 'reg', name: 'Reguler Larut', daysMask: ALL_DAYS, startMin: 1200, endMin: 1440, pricePerHour: 60000, priority: 0 };
+  const rows = (c: ReturnType<typeof computeTimeCharge>) => c.lines.map((l) => [l.label, l.minutes, l.amount, l.fallback === true]);
+
+  it('celah di awal: memakai tarif potongan berikutnya', () => {
+    const c = charge(wib('2026-10-01', '07:00'), wib('2026-10-01', '09:00'), { tariffs: [day] });
+    expect(rows(c)).toEqual([
+      ['Reguler Siang', 60, 40000, true],
+      ['Reguler Siang', 60, 40000, false],
+    ]);
+    expect(c.total).toBe(80000);
+    expect(c.fallback).toBe(true);
+  });
+
+  it('celah di akhir (sesi lewat jam buka): memakai tarif potongan sebelumnya', () => {
+    const c = charge(wib('2026-10-01', '17:00'), wib('2026-10-01', '19:30'), { tariffs: [day] });
+    expect(rows(c)).toEqual([
+      ['Reguler Siang', 60, 40000, false],
+      ['Reguler Siang', 90, 60000, true],
+    ]);
+    expect(c.total).toBe(100000);
+    expect(c.fallback).toBe(true);
+  });
+
+  it('celah di tengah: memakai tarif potongan sebelumnya', () => {
+    const c = charge(wib('2026-10-01', '17:00'), wib('2026-10-01', '21:00'), { tariffs: [day, late] });
+    expect(rows(c)).toEqual([
+      ['Reguler Siang', 60, 40000, false],
+      ['Reguler Siang', 120, 80000, true],
+      ['Reguler Larut', 60, 60000, false],
+    ]);
+    expect(c.total).toBe(180000);
+  });
+
+  it('seluruh sesi di luar tarif: memakai tarif terdekat sebelumnya', () => {
+    const c = charge(wib('2026-10-02', '02:00'), wib('2026-10-02', '03:00'), { tariffs: [day] });
+    expect(rows(c)).toEqual([['Reguler Siang', 60, 40000, true]]);
+    expect(c.fallback).toBe(true);
+  });
+
+  it('minimum main saat anchor di luar tarif tetap dihitung', () => {
+    const c = computeTimeCharge({ intervals: [], anchor: { unitTypeId: 'reg', at: wib('2026-10-01', '06:00') }, tariffs: [day], rounding, utcOffsetMin: WIB });
+    expect(c.total).toBe(40000);
+    expect(c.fallback).toBe(true);
+  });
+
+  it('tanpa celah: tidak ada tanda fallback', () => {
+    const c = charge(wib('2026-10-01', '10:00'), wib('2026-10-01', '11:00'));
+    expect(c.fallback).toBeUndefined();
+    expect(c.lines.every((l) => l.fallback === undefined)).toBe(true);
+  });
+
+  it('tetap melempar NoTariffError jika tipe meja tidak punya tarif sama sekali', () => {
+    expect(() => charge(wib('2026-10-01', '10:00'), wib('2026-10-01', '11:00'), { tariffs: [{ ...day, unitTypeId: 'vip' }] })).toThrow(NoTariffError);
+  });
+});
