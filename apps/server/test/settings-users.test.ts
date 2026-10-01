@@ -18,7 +18,28 @@ describe('settings', () => {
     expect(res.json()).toEqual({
       outletType: 'BILLIARD', outletName: 'FunPlay', address: '', utcOffsetMin: 420, roundingBlockMin: 15,
       minChargeMin: 60, warnBeforeMin: 5, pauseKeepsLightOn: true, autoOffUnexpected: false,
+      taxPct: 0, taxScope: 'ALL', servicePct: 0, serviceScope: 'ALL', discountApprovalPct: 10,
+      receiptHeader: '', receiptFooter: 'Terima kasih!',
+      printerDriver: 'SIMULATOR', printerDevicePath: '/dev/usb/lp0', printerHost: '', printerPort: 9100,
     });
+  });
+  it('owner mengatur pajak, service, struk, dan printer', async () => {
+    const cookie = await loginAs(t.app, 'owner');
+    const payload = {
+      taxPct: 11, taxScope: 'FNB', servicePct: 5, serviceScope: 'ALL', discountApprovalPct: 20,
+      receiptHeader: 'IG @funplay', receiptFooter: 'Sampai jumpa', printerDriver: 'LAN', printerHost: '192.168.1.50', printerPort: 9100,
+    };
+    const res = await t.app.inject({ method: 'PUT', url: '/api/settings', headers: { cookie }, payload });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject(payload);
+  });
+
+  it('persen di luar 0–100 dan cakupan tak dikenal ditolak', async () => {
+    const cookie = await loginAs(t.app, 'owner');
+    for (const payload of [{ taxPct: 101 }, { servicePct: -1 }, { taxScope: 'SEMUA' }, { printerDriver: 'BLUETOOTH' }, { printerPort: 70000 }]) {
+      const res = await t.app.inject({ method: 'PUT', url: '/api/settings', headers: { cookie }, payload });
+      expect(res.statusCode).toBe(400);
+    }
   });
   it('kasir tidak boleh mengubah', async () => {
     const cookie = await loginAs(t.app, 'kasir');

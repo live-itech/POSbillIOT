@@ -1,10 +1,11 @@
 import type { OutletType, Role, SessionMode, SessionStatus, UnitState } from './constants';
 import type { TariffRule } from './billing/tariff';
+import type { TransactionSettings } from './transactions';
 
 export interface PublicUser { id: string; name: string; username: string; role: Role }
 export interface UserDto extends PublicUser { active: boolean; hasPin: boolean }
 
-export interface PublicSettings {
+export interface PublicSettings extends TransactionSettings {
   outletType: OutletType;
   outletName: string;
   address: string;

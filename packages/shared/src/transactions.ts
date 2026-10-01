@@ -128,3 +128,32 @@ export interface PrintJobView {
 }
 
 export interface CheckoutResult { bill: BillView; change: number }
+
+export interface TransactionSettings {
+  taxPct: number;
+  taxScope: Scope;
+  servicePct: number;
+  serviceScope: Scope;
+  /** Diskon total di atas persen subtotal ini butuh PIN supervisor (kasir). */
+  discountApprovalPct: number;
+  receiptHeader: string;
+  receiptFooter: string;
+  printerDriver: PrinterDriver;
+  printerDevicePath: string;
+  printerHost: string;
+  printerPort: number;
+}
+
+export const DEFAULT_TRANSACTION_SETTINGS: TransactionSettings = {
+  taxPct: 0,
+  taxScope: 'ALL',
+  servicePct: 0,
+  serviceScope: 'ALL',
+  discountApprovalPct: 10,
+  receiptHeader: '',
+  receiptFooter: 'Terima kasih!',
+  printerDriver: 'SIMULATOR',
+  printerDevicePath: '/dev/usb/lp0',
+  printerHost: '',
+  printerPort: 9100,
+};

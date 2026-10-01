@@ -1,5 +1,5 @@
 import type { Setting } from '@prisma/client';
-import { OUTLET_TYPES, type PublicSettings } from '@funplay/shared';
+import { OUTLET_TYPES, PRINTER_DRIVERS, SCOPES, type PrinterDriver, type PublicSettings } from '@funplay/shared';
 import { z } from 'zod';
 import type { Db } from '../../db';
 
@@ -14,6 +14,17 @@ export function toPublicSettings(s: Setting): PublicSettings {
     warnBeforeMin: s.warnBeforeMin,
     pauseKeepsLightOn: s.pauseKeepsLightOn,
     autoOffUnexpected: s.autoOffUnexpected,
+    taxPct: s.taxPct,
+    taxScope: s.taxScope,
+    servicePct: s.servicePct,
+    serviceScope: s.serviceScope,
+    discountApprovalPct: s.discountApprovalPct,
+    receiptHeader: s.receiptHeader,
+    receiptFooter: s.receiptFooter,
+    printerDriver: s.printerDriver as PrinterDriver,
+    printerDevicePath: s.printerDevicePath,
+    printerHost: s.printerHost,
+    printerPort: s.printerPort,
   };
 }
 
@@ -39,5 +50,16 @@ export const settingsUpdateSchema = z
     warnBeforeMin: z.number().int().min(0).max(60),
     pauseKeepsLightOn: z.boolean(),
     autoOffUnexpected: z.boolean(),
+    taxPct: z.number().int().min(0).max(100),
+    taxScope: z.enum(SCOPES),
+    servicePct: z.number().int().min(0).max(100),
+    serviceScope: z.enum(SCOPES),
+    discountApprovalPct: z.number().int().min(0).max(100),
+    receiptHeader: z.string().max(200),
+    receiptFooter: z.string().max(200),
+    printerDriver: z.enum(PRINTER_DRIVERS),
+    printerDevicePath: z.string().trim().max(200),
+    printerHost: z.string().trim().max(100),
+    printerPort: z.number().int().min(1).max(65535),
   })
   .partial();

@@ -1,3 +1,4 @@
+import { DEFAULT_TRANSACTION_SETTINGS } from '@funplay/shared';
 import type { UnitView } from '@funplay/shared';
 import { render, screen } from '@testing-library/react';
 import { beforeEach, expect, it } from 'vitest';
@@ -16,7 +17,7 @@ const base: UnitView = {
 
 beforeEach(() => {
   useBoard.setState({
-    settings: { outletType: 'BILLIARD', outletName: 'FunPlay', address: '', utcOffsetMin: 420, roundingBlockMin: 15, minChargeMin: 60, warnBeforeMin: 5, pauseKeepsLightOn: true, autoOffUnexpected: false },
+    settings: { outletType: 'BILLIARD', outletName: 'FunPlay', address: '', utcOffsetMin: 420, roundingBlockMin: 15, minChargeMin: 60, warnBeforeMin: 5, pauseKeepsLightOn: true, autoOffUnexpected: false, ...DEFAULT_TRANSACTION_SETTINGS },
     tariffs: [{ id: 't', unitTypeId: 'reg', name: 'Siang', daysMask: 127, startMin: 480, endMin: 1080, pricePerHour: 40000, priority: 0 }],
   });
 });
