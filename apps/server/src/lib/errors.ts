@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import { NoTariffError } from '@funplay/shared';
 import type { FastifyError, FastifyInstance } from 'fastify';
 import { ZodError } from 'zod';
+import { installIndonesianZodErrors } from './zod-id';
 
 export class AppError extends Error {
   constructor(
@@ -40,6 +41,7 @@ function isForeignKeyViolation(err: unknown): boolean {
 }
 
 export function registerErrorHandler(app: FastifyInstance): void {
+  installIndonesianZodErrors();
   app.setErrorHandler((err: FastifyError | Error, req, reply) => {
     if (err instanceof AppError) {
       return reply.status(err.status).send({ error: { code: err.code, message: err.message } });

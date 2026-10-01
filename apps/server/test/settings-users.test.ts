@@ -40,6 +40,13 @@ describe('settings', () => {
     expect(res.statusCode).toBe(400);
     expect(res.json().error.code).toBe('VALIDATION');
   });
+  it('pesan validasi bawaan dalam Bahasa Indonesia', async () => {
+    const cookie = await loginAs(t.app, 'owner');
+    const tooBig = await t.app.inject({ method: 'PUT', url: '/api/settings', headers: { cookie }, payload: { roundingBlockMin: 61 } });
+    expect(tooBig.json().error).toMatchObject({ code: 'VALIDATION', message: 'Maksimal 60' });
+    const wrongType = await t.app.inject({ method: 'PUT', url: '/api/settings', headers: { cookie }, payload: { roundingBlockMin: 'x' } });
+    expect(wrongType.json().error.message).toBe('Harus berupa angka');
+  });
 });
 
 describe('users', () => {
