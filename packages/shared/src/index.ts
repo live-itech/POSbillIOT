@@ -7,3 +7,5 @@ export * from './billing/session-charge';
 export * from './status';
 export * from './labels';
 export * from './views';
+export * from './transactions';
+export * from './billing/bill-totals';
