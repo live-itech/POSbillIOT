@@ -118,3 +118,38 @@ describe('stop sesi', () => {
     expect((await start({ unitId: b.m1.id, mode: 'OPEN' })).statusCode).toBe(200);
   });
 });
+
+describe('stop tidak pernah terhalang cakupan tarif', () => {
+  it('sesi melewati jam tarif: berhenti dengan harga tarif terdekat dan tercatat di audit', async () => {
+    await prisma.tariff.deleteMany({ where: { name: 'Reguler Malam' } }); // tarif hanya 08:00–18:00
+    const s = (await start({ unitId: b.m1.id, mode: 'OPEN' })).json().unit.session; // 10:00
+    t.clock.advanceMinutes(9 * 60 + 30); // 19:30
+    const res = await stop(s.id);
+    expect(res.statusCode).toBe(200);
+    const charge = res.json().charge;
+    expect(charge.lines.map((l: { label: string; minutes: number; amount: number; fallback?: boolean }) => [l.label, l.minutes, l.amount, l.fallback === true])).toEqual([
+      ['Reguler Siang', 480, 320000, false],
+      ['Reguler Siang', 90, 60000, true],
+    ]);
+    expect(charge.total).toBe(380000);
+    const row = await prisma.session.findUniqueOrThrow({ where: { id: s.id } });
+    expect(row).toMatchObject({ status: 'ENDED', chargeTotal: 380000 });
+    expect(row.chargeDetail).toMatchObject({ fallback: true });
+    const logs = await prisma.auditLog.findMany({ where: { entityId: s.id, action: 'session.tariff_fallback' } });
+    expect(logs).toHaveLength(1);
+  });
+
+  it('tarif tipe meja dihapus semua saat sesi berjalan: tetap bisa stop, total 0, ditandai', async () => {
+    const s = (await start({ unitId: b.m1.id, mode: 'OPEN' })).json().unit.session;
+    await prisma.tariff.deleteMany({ where: { unitTypeId: b.reg.id } });
+    t.clock.advanceMinutes(30);
+    const res = await stop(s.id);
+    expect(res.statusCode).toBe(200);
+    expect(res.json().charge).toMatchObject({ total: 0, noTariff: true, lines: [] });
+    const row = await prisma.session.findUniqueOrThrow({ where: { id: s.id } });
+    expect(row).toMatchObject({ status: 'ENDED', activeUnitId: null, chargeTotal: 0 });
+    expect(row.chargeDetail).toMatchObject({ noTariff: true });
+    expect(await prisma.auditLog.count({ where: { entityId: s.id, action: 'session.tariff_fallback' } })).toBe(1);
+    await vi.waitFor(() => expect(sim().snapshot()[0]).toBe(false));
+  });
+});

@@ -1,7 +1,7 @@
 import { Prisma, type Session } from '@prisma/client';
 import {
-  addMinutes, computeSessionCharge, findTariff, localDateKey,
-  type PublicUser, type SessionMode, type TimeCharge,
+  addMinutes, computeSessionCharge, findTariff, localDateKey, NoTariffError, sessionElapsedMs,
+  type ChargeSettings, type PublicUser, type SessionLike, type SessionMode, type TariffRule, type TimeCharge,
 } from '@funplay/shared';
 import type { AppContext } from '../../context';
 import type { Db } from '../../db';
@@ -28,6 +28,21 @@ export function rethrowBusy(err: unknown, unitName: string): never {
 /** Kunci baris sesi (SELECT ... FOR UPDATE) agar mutasi bersamaan berjalan berurutan. */
 async function lockSession(tx: Db, sessionId: string): Promise<void> {
   await tx.$queryRaw`SELECT id FROM "Session" WHERE id = ${sessionId} FOR UPDATE`;
+}
+
+/**
+ * Tagihan waktu untuk stop. Stop tidak boleh pernah gagal karena tarif: menit di luar cakupan tarif
+ * sudah dihargai kalkulator dengan tarif terdekat (`fallback`). Hanya bila tipe meja sama sekali tidak
+ * punya tarif, tagihan waktu menjadi 0 dan ditandai `noTariff`.
+ */
+export function stopCharge(s: SessionLike, rules: TariffRule[], settings: ChargeSettings, endAt: Date): TimeCharge {
+  try {
+    return computeSessionCharge(s, rules, settings, endAt);
+  } catch (err) {
+    if (!(err instanceof NoTariffError)) throw err;
+    const billableMinutes = Math.ceil(sessionElapsedMs(s, endAt) / 60_000);
+    return { billableMinutes, chargedMinutes: 0, total: 0, lines: [], noTariff: true };
+  }
 }
 
 export const sessionParts = { segments: { orderBy: { startedAt: 'asc' } }, pauses: { orderBy: { pausedAt: 'asc' } } } satisfies Prisma.SessionInclude;
@@ -116,7 +131,7 @@ export class SessionService {
         segments: s.segments.map((g) => ({ ...g, endedAt: g.endedAt ?? endAt })),
         pauses: s.pauses.map((p) => ({ ...p, resumedAt: p.resumedAt ?? endAt })),
       };
-      const charge = computeSessionCharge(closed, await loadTariffRules(tx), settings, endAt);
+      const charge = stopCharge(closed, await loadTariffRules(tx), settings, endAt);
 
       const session = await tx.session.update({
         where: { id: s.id },
@@ -126,6 +141,15 @@ export class SessionService {
         },
       });
       await audit(tx, { userId: user.id, action: 'session.stop', entity: 'Session', entityId: s.id, data: { total: charge.total } });
+      if (charge.fallback || charge.noTariff) {
+        await audit(tx, {
+          userId: user.id, action: 'session.tariff_fallback', entity: 'Session', entityId: s.id,
+          data: {
+            noTariff: charge.noTariff === true,
+            fallbackLines: charge.lines.filter((l) => l.fallback).map((l) => ({ tariffId: l.tariffId, minutes: l.minutes, amount: l.amount })),
+          },
+        });
+      }
       return { session, charge };
     });
 
@@ -194,6 +218,7 @@ export class SessionService {
   async move(user: PublicUser, sessionId: string, toUnitId: string): Promise<{ from: string; to: string }> {
     const { prisma, clock } = this.ctx;
     const now = clock.now();
+    const settings = await getSettings(prisma);
     const target = await prisma.unit.findUnique({ where: { id: toUnitId }, select: { name: true } });
     let result: { from: string; to: string };
     try {
@@ -205,6 +230,7 @@ export class SessionService {
         if (!to) throw notFound('Meja tujuan');
         if (to.state === 'MAINTENANCE') throw conflict('UNIT_MAINTENANCE', `${to.name} sedang maintenance`);
         if (to.activeSession) throw conflict('UNIT_BUSY', `${to.name} sedang dipakai`);
+        if (s.mode === 'OPEN') findTariff(await loadTariffRules(tx), to.unitTypeId, now, settings.utcOffsetMin); // sama seperti start
 
         await tx.sessionSegment.updateMany({ where: { sessionId: s.id, endedAt: null }, data: { endedAt: now } });
         await tx.sessionSegment.create({ data: { sessionId: s.id, unitId: to.id, unitTypeId: to.unitTypeId, startedAt: now } });

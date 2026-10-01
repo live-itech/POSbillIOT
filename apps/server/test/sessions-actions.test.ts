@@ -100,6 +100,16 @@ describe('pindah meja', () => {
     expect((await post(`/api/sessions/${s.id}/move`, { toUnitId: b.v1.id })).json().error.code).toBe('UNIT_MAINTENANCE');
     expect((await post(`/api/sessions/${s.id}/move`, { toUnitId: b.m1.id })).json().error.code).toBe('SAME_UNIT');
   });
+
+  it('pindah ke tipe meja tanpa tarif pada jam sekarang → 422 NO_TARIFF, sesi tetap di meja asal', async () => {
+    const s = await startOpen(b.m1.id);
+    await prisma.tariff.deleteMany({ where: { unitTypeId: b.vip.id } });
+    const res = await post(`/api/sessions/${s.id}/move`, { toUnitId: b.v1.id });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().error).toMatchObject({ code: 'NO_TARIFF', message: expect.stringMatching(/tarif/i) });
+    expect((await prisma.session.findUniqueOrThrow({ where: { id: s.id } })).unitId).toBe(b.m1.id);
+  });
+
 });
 
 describe('konkurensi', () => {
