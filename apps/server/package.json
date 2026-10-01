@@ -1,0 +1,33 @@
+{
+  "name": "@funplay/server",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --env-file=.env src/main.ts",
+    "build": "tsup src/main.ts src/seed.ts --format esm --target node22 --clean --no-splitting --noExternal @funplay/shared",
+    "start": "node --env-file=.env dist/main.js",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "db:migrate": "prisma migrate dev",
+    "db:seed": "tsx --env-file=.env src/seed.ts"
+  },
+  "dependencies": {
+    "@fastify/cookie": "^11.1.2",
+    "@fastify/static": "^8.3.0",
+    "@funplay/shared": "workspace:*",
+    "@prisma/client": "^6.19.3",
+    "argon2": "^0.45.1",
+    "fastify": "^5.12.5",
+    "socket.io": "^4.8.4",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.4",
+    "prisma": "^6.19.3",
+    "socket.io-client": "^4.8.4",
+    "tsup": "^8.5.1",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.7"
+  }
+}

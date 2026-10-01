@@ -1,0 +1,33 @@
+@import 'tailwindcss';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: 'Plus Jakarta Sans Variable', ui-sans-serif, system-ui, sans-serif;
+  --color-primary: #7c3aed;
+  --color-primary-ink: #6d28d9;
+  --color-primary-soft: #ede9fe;
+  --color-accent: #f59e0b;
+  --color-bg: #faf8ff;
+  --color-surface: #ffffff;
+  --color-ink: #1e1b4b;
+  --color-muted: #6b7280;
+  --color-line: #ede9fe;
+  --animate-pulse-soft: pulse-soft 1.6s ease-in-out infinite;
+
+  @keyframes pulse-soft {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.78; }
+  }
+}
+
+.dark {
+  --color-bg: #13111c;
+  --color-surface: #1e1b2e;
+  --color-ink: #ede9fe;
+  --color-muted: #a5a1c2;
+  --color-line: #2e2a45;
+  --color-primary-soft: #2e1f5e;
+}
+
+html, body, #root { height: 100%; }
