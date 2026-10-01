@@ -1,0 +1,12 @@
+{
+  "name": "FunPlay",
+  "short_name": "FunPlay",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FAF8FF",
+  "theme_color": "#7C3AED",
+  "icons": [
+    { "src": "/brand/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/brand/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

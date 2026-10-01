@@ -1,6 +1,7 @@
 import { outletLabels } from '@funplay/shared';
 import { useMemo, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
+import { Illustration, UnitTypeIcon } from '../../components/brand/Brand';
 import { useNow } from '../../hooks/useNow';
 import { cn } from '../../lib/cn';
 import { useBoard } from '../../stores/board';
@@ -37,10 +38,25 @@ export function BoardPage() {
                 onClick={() => setFilter(t)}
                 className={cn('rounded-full px-4 py-1.5 text-sm font-semibold transition', filter === t ? 'bg-primary text-white' : 'bg-primary-soft text-primary-ink')}
               >
-                {t === 'ALL' ? `${labels.icon} Semua ${labels.unit}` : t}
+                {t === 'ALL' ? (
+                  <span className="inline-flex items-center gap-1.5">
+                    <UnitTypeIcon outletType={settings.outletType} /> Semua {labels.unit}
+                  </span>
+                ) : (
+                  t
+                )}
               </button>
             ))}
           </div>
+          {order.length === 0 && (
+            <div className="grid flex-1 place-items-center rounded-2xl bg-surface p-6 text-center">
+              <div>
+                <Illustration name="empty-units" className="w-64" />
+                <p className="mt-3 font-bold">Belum ada {labels.unit.toLowerCase()}</p>
+                <p className="text-sm text-muted">Owner bisa menambahkannya di menu Pengaturan.</p>
+              </div>
+            </div>
+          )}
           <div className="grid min-h-0 grid-cols-2 content-start gap-3 overflow-y-auto pb-4 sm:grid-cols-3 xl:grid-cols-4">
             {visible.map((id) => (
               <UnitCard key={id} unit={units[id]!} now={now} selected={selectedUnitId === id} onSelect={() => select(id)} />

@@ -2,6 +2,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { LayoutGrid, LogOut, Moon, Settings } from 'lucide-react';
 import { NavLink, Outlet } from 'react-router';
+import { Logo } from '../../components/brand/Brand';
 import { Button } from '../../components/ui/button';
 import { cn } from '../../lib/cn';
 import { beep } from '../../lib/beep';
@@ -38,7 +39,7 @@ export function AppShell() {
   return (
     <div className="flex h-full">
       <nav className="flex w-16 flex-col items-center gap-2 border-r border-line bg-surface py-4">
-        <div className="mb-4 text-lg font-extrabold text-primary">F<span className="text-accent">P</span></div>
+        <img src="/brand/icon-64.png" alt="FunPlay" className="mb-4 h-10 w-10" />
         {items.filter((i) => i.show).map((i) => (
           <NavLink
             key={i.to}
@@ -55,9 +56,7 @@ export function AppShell() {
       </nav>
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex items-center justify-between border-b border-line bg-surface px-4 py-2">
-          <div className="text-lg font-extrabold text-primary">
-            Fun<span className="text-accent">Play</span>
-          </div>
+          <Logo className="h-8" />
           <div className="flex items-center gap-2 text-sm">
             <span className="rounded-full bg-primary-soft px-3 py-1 font-semibold text-primary-ink">
               {me.name} · {ROLE_LABEL[me.role]}

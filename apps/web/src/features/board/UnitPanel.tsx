@@ -1,4 +1,5 @@
 import { outletLabels } from '@funplay/shared';
+import { Illustration } from '../../components/brand/Brand';
 import { useNow } from '../../hooks/useNow';
 import { useBoard } from '../../stores/board';
 import { ActiveSession } from './ActiveSession';
@@ -26,6 +27,12 @@ export function UnitPanel() {
         </div>
         <span className={`rounded-full px-3 py-1 text-xs font-bold ${STATUS_STYLE[status].card}`}>{STATUS_STYLE[status].label}</span>
       </header>
+      {unit.deviceOnline === false && (
+        <div role="status" className="flex items-center gap-3 rounded-xl bg-rose-50 p-3 text-sm text-rose-800 dark:bg-rose-950/40 dark:text-rose-200">
+          <Illustration name="empty-device-offline" className="w-20 shrink-0" />
+          <p>Device lampu offline. Sesi tetap berjalan; lampu akan menyesuaikan otomatis saat device tersambung lagi.</p>
+        </div>
+      )}
       {status === 'MAINTENANCE' && <p className="rounded-xl bg-gray-100 p-3 text-sm text-gray-700">Sedang maintenance — tidak bisa dipakai.</p>}
       {status === 'IDLE' && <StartSession key={unit.id} unit={unit} />}
       {unit.session && <ActiveSession key={unit.id} unit={unit} session={unit.session} status={status} now={now} />}
