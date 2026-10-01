@@ -10,3 +10,5 @@ export * from './views';
 export * from './transactions';
 export * from './billing/bill-totals';
 export * from './billing/payment';
+export * from './receipt/receipt';
+export * from './receipt/escpos';
