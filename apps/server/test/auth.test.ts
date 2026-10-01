@@ -86,4 +86,24 @@ describe('approveWithPin', () => {
     t.clock.advanceMinutes(6);
     expect(await approveWithPin(prisma, t.clock, pub(users.kasir), '1111')).toBe(users.supervisor.id);
   });
+  it('PIN salah paralel tidak bisa menembus batas 5 percobaan', async () => {
+    const results = await Promise.allSettled(Array.from({ length: 10 }, () => approveWithPin(prisma, t.clock, pub(users.kasir), '9999')));
+    const codes = results.map((r) => (r.status === 'rejected' ? (r.reason as { code: string }).code : 'OK'));
+    expect(codes.filter((c) => c === 'PIN_INVALID').length).toBeLessThanOrEqual(5);
+    expect(codes.filter((c) => c !== 'PIN_INVALID' && c !== 'PIN_LOCKED')).toEqual([]);
+    expect(codes.filter((c) => c === 'PIN_LOCKED').length).toBeGreaterThanOrEqual(5);
+    await expect(approveWithPin(prisma, t.clock, pub(users.kasir), '1111')).rejects.toMatchObject({ code: 'PIN_LOCKED', status: 423 });
+    const row = await prisma.user.findUniqueOrThrow({ where: { id: users.kasir.id } });
+    expect(row.lockedUntil?.toISOString()).toBe(new Date(t.clock.now().getTime() + 5 * 60_000).toISOString());
+  });
+  it('PIN benar mengatur ulang hitungan gagal', async () => {
+    for (let i = 0; i < 4; i++) {
+      await expect(approveWithPin(prisma, t.clock, pub(users.kasir), '9999')).rejects.toMatchObject({ code: 'PIN_INVALID' });
+    }
+    expect(await approveWithPin(prisma, t.clock, pub(users.kasir), '1111')).toBe(users.supervisor.id);
+    for (let i = 0; i < 4; i++) {
+      await expect(approveWithPin(prisma, t.clock, pub(users.kasir), '9999')).rejects.toMatchObject({ code: 'PIN_INVALID' });
+    }
+    expect(await approveWithPin(prisma, t.clock, pub(users.kasir), '1111')).toBe(users.supervisor.id);
+  });
 });
