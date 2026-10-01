@@ -3,6 +3,8 @@ let audio: AudioContext | null = null;
 export function beep(level: 'info' | 'warning' | 'danger'): void {
   try {
     audio ??= new AudioContext();
+    // Browser memulai AudioContext dalam keadaan suspended sampai ada interaksi pengguna.
+    if (audio.state === 'suspended') void audio.resume().catch(() => {});
     const osc = audio.createOscillator();
     const gain = audio.createGain();
     osc.frequency.value = level === 'danger' ? 880 : level === 'warning' ? 660 : 520;
