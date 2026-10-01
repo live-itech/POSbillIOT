@@ -9,3 +9,4 @@ export * from './labels';
 export * from './views';
 export * from './transactions';
 export * from './billing/bill-totals';
+export * from './billing/payment';
