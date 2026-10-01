@@ -23,7 +23,10 @@ pnpm e2e         # Playwright (DB funplay_e2e)
 ```
 
 ## Produksi (sementara, sebelum M5)
+`pnpm start` membaca `apps/server/.env` — salin dulu dari contoh (`cp apps/server/.env.example apps/server/.env`) lalu isi `DATABASE_URL` dan `COOKIE_SECRET` untuk produksi.
 ```bash
+pnpm install
+pnpm --filter @funplay/server exec prisma migrate deploy   # terapkan migrasi ke DB produksi
 pnpm build
 cd apps/server && WEB_DIST=$(pwd)/../web/dist NODE_ENV=production pnpm start
 ```
