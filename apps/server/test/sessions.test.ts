@@ -117,6 +117,15 @@ describe('stop sesi', () => {
     await stop(s.id);
     expect((await start({ unitId: b.m1.id, mode: 'OPEN' })).statusCode).toBe(200);
   });
+
+  it('stop menghapus override lampu manual', async () => {
+    const s = (await start({ unitId: b.m1.id, mode: 'OPEN' })).json().unit.session;
+    await prisma.unit.update({ where: { id: b.m1.id }, data: { lightOverride: true } });
+    const res = await stop(s.id);
+    expect(res.statusCode).toBe(200);
+    expect((await prisma.unit.findUniqueOrThrow({ where: { id: b.m1.id } })).lightOverride).toBeNull();
+    await vi.waitFor(() => expect(sim().snapshot()[0]).toBe(false));
+  });
 });
 
 describe('stop tidak pernah terhalang cakupan tarif', () => {

@@ -140,6 +140,7 @@ export class SessionService {
           chargeTotal: charge.total, chargeDetail: charge as unknown as Prisma.InputJsonValue,
         },
       });
+      await tx.unit.updateMany({ where: { id: s.unitId, lightOverride: { not: null } }, data: { lightOverride: null } });
       await audit(tx, { userId: user.id, action: 'session.stop', entity: 'Session', entityId: s.id, data: { total: charge.total } });
       if (charge.fallback || charge.noTariff) {
         await audit(tx, {
@@ -235,7 +236,7 @@ export class SessionService {
         await tx.sessionSegment.updateMany({ where: { sessionId: s.id, endedAt: null }, data: { endedAt: now } });
         await tx.sessionSegment.create({ data: { sessionId: s.id, unitId: to.id, unitTypeId: to.unitTypeId, startedAt: now } });
         await tx.session.update({ where: { id: s.id }, data: { unitId: to.id, activeUnitId: to.id } });
-        if (to.lightOverride !== null) await tx.unit.update({ where: { id: to.id }, data: { lightOverride: null } });
+        await tx.unit.updateMany({ where: { id: { in: [s.unitId, to.id] }, lightOverride: { not: null } }, data: { lightOverride: null } });
         await audit(tx, { userId: user.id, action: 'session.move', entity: 'Session', entityId: s.id, data: { from: s.unitId, to: to.id } });
         return { from: s.unitId, to: to.id };
       });

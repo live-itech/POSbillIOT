@@ -80,6 +80,7 @@ export class Scheduler {
       const r = await tx.session.updateMany({ where: { id: sessionId, status: 'RUNNING', plannedEndAt: endAt }, data: { status: 'EXPIRED', endedAt: endAt } });
       if (r.count === 0) return false;
       await tx.sessionSegment.updateMany({ where: { sessionId, endedAt: null }, data: { endedAt: endAt } });
+      await tx.unit.updateMany({ where: { id: unitId, lightOverride: { not: null } }, data: { lightOverride: null } });
       await audit(tx, { userId: null, action: 'session.expire', entity: 'Session', entityId: sessionId });
       return true;
     });

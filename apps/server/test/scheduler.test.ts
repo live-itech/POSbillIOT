@@ -50,6 +50,15 @@ describe('Scheduler.tick', () => {
     expect(stop.json().charge.total).toBe(45000);
   });
 
+  it('auto-expire menghapus override lampu manual sehingga lampu mati', async () => {
+    await post('/api/sessions', { unitId: b.m1.id, mode: 'PACKAGE', packageId: b.pkg1.id });
+    await prisma.unit.update({ where: { id: b.m1.id }, data: { lightOverride: true } });
+    t.clock.advanceMinutes(61);
+    await t.ctx.scheduler.tick();
+    expect((await prisma.unit.findUniqueOrThrow({ where: { id: b.m1.id } })).lightOverride).toBeNull();
+    await vi.waitFor(() => expect(sim().snapshot()[0]).toBe(false));
+  });
+
   it('tambah waktu setelah EXPIRED menghidupkan sesi lagi tanpa menagih jeda', async () => {
     const s = (await post('/api/sessions', { unitId: b.m1.id, mode: 'PACKAGE', packageId: b.pkg1.id })).json().unit.session;
     t.clock.advanceMinutes(60);

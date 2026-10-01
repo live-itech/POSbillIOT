@@ -110,6 +110,12 @@ describe('pindah meja', () => {
     expect((await prisma.session.findUniqueOrThrow({ where: { id: s.id } })).unitId).toBe(b.m1.id);
   });
 
+  it('pindah meja menghapus override lampu di meja asal', async () => {
+    const s = await startOpen(b.m1.id);
+    await prisma.unit.update({ where: { id: b.m1.id }, data: { lightOverride: true } });
+    await post(`/api/sessions/${s.id}/move`, { toUnitId: b.m2.id });
+    expect((await prisma.unit.findUniqueOrThrow({ where: { id: b.m1.id } })).lightOverride).toBeNull();
+  });
 });
 
 describe('konkurensi', () => {
