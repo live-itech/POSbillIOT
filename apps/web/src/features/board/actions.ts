@@ -8,7 +8,7 @@ export function useSessionAction() {
   return useMutation({
     mutationFn: ({ path, body }: { path: string; body?: Record<string, unknown> }) => api<{ unit: UnitView }>('POST', path, body ?? {}),
     onSuccess: (r) => {
-      useBoard.getState().applyUnit(r.unit);
+      useBoard.getState().applyActionUnit(r.unit);
       useBoard.getState().select(r.unit.id);
     },
     onError: showError,

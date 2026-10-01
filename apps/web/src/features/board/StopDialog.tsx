@@ -12,7 +12,7 @@ export function StopDialog(props: { unitName: string; sessionId: string; preview
   const stop = useMutation({
     mutationFn: () => api<{ unit: UnitView; charge: TimeCharge }>('POST', `/sessions/${props.sessionId}/stop`, {}),
     onSuccess: (r) => {
-      useBoard.getState().applyUnit(r.unit);
+      useBoard.getState().applyActionUnit(r.unit);
       toast.success(`${props.unitName} selesai. Total waktu ${formatRupiah(r.charge.total)}`);
       props.onClose();
     },

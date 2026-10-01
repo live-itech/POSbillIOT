@@ -22,6 +22,8 @@ interface BoardState {
   selectedUnitId: string | null;
   applyBoard(b: BoardSnapshot, receivedAtMs: number): void;
   applyUnit(u: UnitView): void;
+  /** Respons aksi HTTP: lampu dikirim lewat socket setelah rekonsiliasi, jadi jangan menimpa dengan nilai basi. */
+  applyActionUnit(u: UnitView): void;
   applyDevice(d: DeviceStatusView): void;
   select(id: string | null): void;
   setConnected(v: boolean): void;
@@ -53,6 +55,13 @@ export const useBoard = create<BoardState>((set) => ({
     set((s) => {
       const units = { ...s.units, [u.id]: u };
       return { units, order: s.units[u.id] ? s.order : sortIds(units) };
+    }),
+  applyActionUnit: (u) =>
+    set((s) => {
+      const prev = s.units[u.id];
+      const merged = prev ? { ...u, light: prev.light } : u;
+      const units = { ...s.units, [u.id]: merged };
+      return { units, order: prev ? s.order : sortIds(units) };
     }),
   applyDevice: (d) => set((s) => ({ devices: { ...s.devices, [d.id]: d } })),
   select: (id) => set({ selectedUnitId: id }),
