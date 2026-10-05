@@ -144,6 +144,20 @@ export class SessionService {
           chargeTotal: charge.total, chargeDetail: charge as unknown as Prisma.InputJsonValue,
         },
       });
+      const unit = await tx.unit.findUnique({ where: { id: s.unitId }, select: { name: true } });
+      const modeLabel = s.mode === 'PACKAGE' ? (s.packageName ?? 'Paket') : 'Open billing';
+      await tx.billLine.create({
+        data: {
+          billId: s.billId,
+          type: 'TIME',
+          sessionId: s.id,
+          nameSnapshot: `${unit?.name ?? 'Meja'} - ${modeLabel}`,
+          unitPrice: charge.total,
+          qty: 1,
+          breakdown: charge.lines as unknown as Prisma.InputJsonValue,
+          createdById: user.id,
+        },
+      });
       await tx.unit.updateMany({ where: { id: s.unitId, lightOverride: { not: null } }, data: { lightOverride: null } });
       await audit(tx, { userId: user.id, action: 'session.stop', entity: 'Session', entityId: s.id, data: { total: charge.total } });
       if (charge.fallback || charge.noTariff) {
@@ -159,6 +173,7 @@ export class SessionService {
     });
 
     this.touch(result.session.unitId);
+    this.ctx.bus.emit('bill.changed', result.session.billId);
     return result;
   }
 

@@ -4,6 +4,7 @@ import type { Bus } from './lib/bus';
 import type { Clock } from './lib/clock';
 import type { DeviceManager } from './modules/devices/device-manager';
 import type { Scheduler } from './modules/scheduler/scheduler';
+import type { BillService } from './modules/billing/bills.service';
 import type { SessionService } from './modules/sessions/sessions.service';
 import type { ShiftService } from './modules/shifts/shifts.service';
 
@@ -15,5 +16,6 @@ export interface AppContext {
   devices: DeviceManager;
   sessions: SessionService;
   shifts: ShiftService;
+  bills: BillService;
   scheduler: Scheduler;
 }

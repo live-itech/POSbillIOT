@@ -6,6 +6,8 @@ import type { Config } from './config';
 import type { AppContext } from './context';
 import { Bus } from './lib/bus';
 import type { Clock } from './lib/clock';
+import { BillService } from './modules/billing/bills.service';
+import { billsRoutes } from './modules/billing/bills.routes';
 import { registerErrorHandler } from './lib/errors';
 import { authRoutes } from './modules/auth/auth.routes';
 import { installAuth } from './modules/auth/guard';
@@ -50,6 +52,7 @@ export async function buildApp(deps: BuildAppDeps) {
   const ctx = { prisma: deps.prisma, clock: deps.clock, config: deps.config, bus, devices } as AppContext;
   ctx.sessions = new SessionService(ctx);
   ctx.shifts = new ShiftService(ctx);
+  ctx.bills = new BillService(ctx);
   ctx.scheduler = new Scheduler(ctx);
 
   registerErrorHandler(app);
@@ -71,6 +74,7 @@ export async function buildApp(deps: BuildAppDeps) {
       await api.register(devicesRoutes(ctx));
       await api.register(sessionsRoutes(ctx));
       await api.register(shiftsRoutes(ctx));
+      await api.register(billsRoutes(ctx));
     },
     { prefix: '/api' },
   );
