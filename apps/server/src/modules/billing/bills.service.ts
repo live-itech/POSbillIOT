@@ -2,7 +2,7 @@ import type { BillLine } from '@prisma/client';
 import type { BillStatus, BillSummary, BillView, Discount, PublicUser } from '@funplay/shared';
 import type { AppContext } from '../../context';
 import type { Db } from '../../db';
-import { badRequest, conflict, notFound } from '../../lib/errors';
+import { AppError, badRequest, conflict, notFound } from '../../lib/errors';
 import { audit } from '../audit/audit';
 import { approveWithPin } from '../auth/auth.service';
 import { nextBillNumber } from '../sessions/sessions.service';
@@ -115,6 +115,7 @@ export class BillService {
     if (current.type === 'TIME') throw conflict('LINE_LOCKED', 'Baris waktu tidak bisa dihapus');
     const approvedById = await approveWithPin(prisma, clock, user, approvalPin);
     await prisma.$transaction(async (tx) => {
+      await requireOpenShift(tx);
       const bill = await requireOpenBill(tx, billId);
       const line = findLine(bill.lines, lineId);
       await tx.billLine.delete({ where: { id: line.id } });
@@ -145,7 +146,12 @@ export class BillService {
     const total = linesTotals(pre, settings).grandTotal;
     const approvedById = total > 0 ? await approveWithPin(prisma, clock, user, input.approvalPin) : null;
     await prisma.$transaction(async (tx) => {
-      await requireOpenBill(tx, billId);
+      const locked = await requireOpenBill(tx, billId);
+      const running = await tx.session.count({ where: { billId, status: { not: 'ENDED' } } });
+      if (running) throw conflict('SESSION_ACTIVE', 'Hentikan sesi meja terlebih dahulu');
+      if (linesTotals(locked, settings).grandTotal > 0 && !approvedById && user.role === 'KASIR') {
+        throw new AppError(403, 'APPROVAL_REQUIRED', 'Aksi ini butuh PIN supervisor');
+      }
       await tx.bill.update({ where: { id: billId }, data: { status: 'CANCELLED', cancelReason: input.reason } });
       await audit(tx, { userId: user.id, action: 'bill.cancel', entity: 'Bill', entityId: billId, data: { reason: input.reason, total }, approvedById });
     });
@@ -158,6 +164,8 @@ export class BillService {
     if (targetId === sourceId) throw badRequest('SAME_BILL', 'Pilih bill lain untuk digabung');
     const movedUnits = await prisma.$transaction(async (tx) => {
       await requireOpenShift(tx);
+      // urutan kunci global: sesi → bill (sama dengan stop)
+      await tx.$queryRaw`SELECT id FROM "Session" WHERE "billId" IN (${targetId}, ${sourceId}) AND status <> 'ENDED' ORDER BY id FOR UPDATE`;
       for (const id of [targetId, sourceId].sort()) await lockBill(tx, id); // urutan tetap → tidak deadlock
       const [target, source] = await Promise.all([
         tx.bill.findUniqueOrThrow({ where: { id: targetId } }),

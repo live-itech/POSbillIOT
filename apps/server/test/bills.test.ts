@@ -151,3 +151,53 @@ describe('batal & gabung', () => {
     expect(found.map((x: { id: string }) => x.id)).toEqual([a]);
   });
 });
+
+describe('konkurensi & shift (perbaikan review)', () => {
+  it('hapus item tanpa shift → NO_OPEN_SHIFT', async () => {
+    const bill = (await req('POST', '/api/bills')).json();
+    const line = (await req('POST', `/api/bills/${bill.id}/items`, { items: [{ productId: teh.id, qty: 1 }] })).json().lines[0];
+    await prisma.shift.updateMany({ data: { openFlag: null, closedAt: new Date() } });
+    const res = await req('DELETE', `/api/bills/${bill.id}/items/${line.id}`, { approvalPin: '1111' });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.code).toBe('NO_OPEN_SHIFT');
+  });
+
+  it('batal bill bertagihan tanpa PIN ditolak, bill tetap OPEN', async () => {
+    const bill = (await req('POST', '/api/bills')).json();
+    await req('POST', `/api/bills/${bill.id}/items`, { items: [{ productId: teh.id, qty: 1 }] });
+    const res = await req('POST', `/api/bills/${bill.id}/cancel`, { reason: 'tes' });
+    expect(res.json().error.code).toBe('APPROVAL_REQUIRED');
+    expect((await prisma.bill.findUniqueOrThrow({ where: { id: bill.id } })).status).toBe('OPEN');
+  });
+
+  it('batal berbarengan dengan tambah item: bill CANCELLED tidak pernah berisi item tanpa PIN', async () => {
+    const bill = (await req('POST', '/api/bills')).json();
+    const [c, a] = await Promise.all([
+      req('POST', `/api/bills/${bill.id}/cancel`, { reason: 'tes' }),
+      req('POST', `/api/bills/${bill.id}/items`, { items: [{ productId: teh.id, qty: 1 }] }),
+    ]);
+    expect(c.statusCode).toBeLessThan(500);
+    expect(a.statusCode).toBeLessThan(500);
+    const row = await prisma.bill.findUniqueOrThrow({ where: { id: bill.id }, include: { lines: true } });
+    if (row.status === 'CANCELLED') expect(row.lines).toHaveLength(0);
+  });
+
+  it('stop dan gabung berbarengan: tidak deadlock/500, state konsisten', async () => {
+    const a = await playAndStop(b.m1.id);
+    const running = (await req('POST', '/api/sessions', { unitId: b.m2.id, mode: 'OPEN' })).json().unit.session;
+    t.clock.advanceMinutes(30);
+    const [stop, merge] = await Promise.all([
+      req('POST', `/api/sessions/${running.id}/stop`, {}),
+      req('POST', `/api/bills/${a}/merge`, { sourceBillId: running.billId }),
+    ]);
+    expect(stop.statusCode).toBeLessThan(500);
+    expect(merge.statusCode).toBeLessThan(500);
+    const sess = await prisma.session.findUniqueOrThrow({ where: { id: running.id } });
+    const timeLines = await prisma.billLine.findMany({ where: { sessionId: running.id } });
+    expect(timeLines).toHaveLength(sess.status === 'ENDED' ? 1 : 0);
+    if (merge.statusCode === 200) {
+      expect(sess.billId).toBe(a);
+      expect(timeLines.every((l) => l.billId === a)).toBe(true);
+    }
+  });
+});
