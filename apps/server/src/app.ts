@@ -10,6 +10,8 @@ import { registerErrorHandler } from './lib/errors';
 import { authRoutes } from './modules/auth/auth.routes';
 import { installAuth } from './modules/auth/guard';
 import { packagesRoutes } from './modules/catalog/packages.routes';
+import { categoriesRoutes } from './modules/catalog/categories.routes';
+import { productsRoutes } from './modules/catalog/products.routes';
 import { tariffsRoutes } from './modules/catalog/tariffs.routes';
 import { unitTypesRoutes } from './modules/catalog/unit-types.routes';
 import { unitsRoutes } from './modules/catalog/units.routes';
@@ -64,6 +66,8 @@ export async function buildApp(deps: BuildAppDeps) {
       await api.register(unitsRoutes(ctx));
       await api.register(tariffsRoutes(ctx));
       await api.register(packagesRoutes(ctx));
+      await api.register(categoriesRoutes(ctx));
+      await api.register(productsRoutes(ctx));
       await api.register(devicesRoutes(ctx));
       await api.register(sessionsRoutes(ctx));
       await api.register(shiftsRoutes(ctx));
