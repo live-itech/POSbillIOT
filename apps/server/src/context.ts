@@ -5,6 +5,7 @@ import type { Clock } from './lib/clock';
 import type { DeviceManager } from './modules/devices/device-manager';
 import type { Scheduler } from './modules/scheduler/scheduler';
 import type { BillService } from './modules/billing/bills.service';
+import type { CheckoutService } from './modules/billing/checkout.service';
 import type { SessionService } from './modules/sessions/sessions.service';
 import type { ShiftService } from './modules/shifts/shifts.service';
 
@@ -17,5 +18,6 @@ export interface AppContext {
   sessions: SessionService;
   shifts: ShiftService;
   bills: BillService;
+  checkout: CheckoutService;
   scheduler: Scheduler;
 }
