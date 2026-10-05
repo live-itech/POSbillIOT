@@ -9,6 +9,7 @@ import { badRequest, conflict, notFound } from '../../lib/errors';
 import { audit } from '../audit/audit';
 import { approveWithPin } from '../auth/auth.service';
 import { loadTariffRules } from '../catalog/tariffs.service';
+import { requireOpenShift } from '../shifts/shifts.service';
 import { getSettings } from '../settings/settings.service';
 
 export async function nextBillNumber(tx: Db, now: Date, utcOffsetMin: number): Promise<string> {
@@ -67,6 +68,7 @@ export class SessionService {
     let session: Session;
     try {
       session = await prisma.$transaction(async (tx) => {
+        await requireOpenShift(tx);
         const unit = await tx.unit.findUnique({ where: { id: input.unitId }, include: { activeSession: true } });
         if (!unit) throw notFound('Meja');
         if (unit.state === 'MAINTENANCE') throw conflict('UNIT_MAINTENANCE', `${unit.name} sedang maintenance`);
@@ -83,7 +85,9 @@ export class SessionService {
           findTariff(await loadTariffRules(tx), unit.unitTypeId, now, settings.utcOffsetMin); // gagal cepat bila tarif belum diatur
         }
 
-        const bill = await tx.bill.create({ data: { number: await nextBillNumber(tx, now, settings.utcOffsetMin), createdById: user.id } });
+        const bill = await tx.bill.create({
+          data: { number: await nextBillNumber(tx, now, settings.utcOffsetMin), label: unit.name, createdById: user.id },
+        });
         const s = await tx.session.create({
           data: {
             billId: bill.id,

@@ -81,3 +81,7 @@ export async function seedBasics() {
   const pkg2 = await prisma.package.create({ data: { name: 'Paket 2 Jam', unitTypeId: reg.id, durationMin: 120, price: 90000 } });
   return { reg, vip, device, m1, m2, v1, pkg1, pkg2 };
 }
+
+export async function openShift(userId: string, openingCash = 0) {
+  return prisma.shift.create({ data: { openedById: userId, openedAt: T0, openingCash, openFlag: true } });
+}

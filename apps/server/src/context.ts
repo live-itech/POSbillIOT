@@ -5,6 +5,7 @@ import type { Clock } from './lib/clock';
 import type { DeviceManager } from './modules/devices/device-manager';
 import type { Scheduler } from './modules/scheduler/scheduler';
 import type { SessionService } from './modules/sessions/sessions.service';
+import type { ShiftService } from './modules/shifts/shifts.service';
 
 export interface AppContext {
   prisma: PrismaClient;
@@ -13,5 +14,6 @@ export interface AppContext {
   bus: Bus;
   devices: DeviceManager;
   sessions: SessionService;
+  shifts: ShiftService;
   scheduler: Scheduler;
 }

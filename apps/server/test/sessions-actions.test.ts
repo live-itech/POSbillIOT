@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { loginAs, makeApp, prisma, resetDb, seedBasics, seedUsers } from './helpers';
+import { loginAs, makeApp, prisma, resetDb, seedBasics, openShift, seedUsers } from './helpers';
 
 let t: Awaited<ReturnType<typeof makeApp>>;
 let b: Awaited<ReturnType<typeof seedBasics>>;
@@ -9,6 +9,7 @@ let cookie: string;
 beforeEach(async () => {
   await resetDb();
   users = await seedUsers();
+  await openShift(users.kasir.id);
   b = await seedBasics();
   t = await makeApp();
   cookie = await loginAs(t.app, 'kasir');

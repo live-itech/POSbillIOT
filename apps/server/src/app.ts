@@ -20,6 +20,8 @@ import { attachRealtime } from './modules/realtime/realtime';
 import { Scheduler } from './modules/scheduler/scheduler';
 import { sessionsRoutes } from './modules/sessions/sessions.routes';
 import { SessionService } from './modules/sessions/sessions.service';
+import { shiftsRoutes } from './modules/shifts/shifts.routes';
+import { ShiftService } from './modules/shifts/shifts.service';
 import { settingsRoutes } from './modules/settings/settings.routes';
 import { usersRoutes } from './modules/users/users.routes';
 
@@ -45,6 +47,7 @@ export async function buildApp(deps: BuildAppDeps) {
   });
   const ctx = { prisma: deps.prisma, clock: deps.clock, config: deps.config, bus, devices } as AppContext;
   ctx.sessions = new SessionService(ctx);
+  ctx.shifts = new ShiftService(ctx);
   ctx.scheduler = new Scheduler(ctx);
 
   registerErrorHandler(app);
@@ -63,6 +66,7 @@ export async function buildApp(deps: BuildAppDeps) {
       await api.register(packagesRoutes(ctx));
       await api.register(devicesRoutes(ctx));
       await api.register(sessionsRoutes(ctx));
+      await api.register(shiftsRoutes(ctx));
     },
     { prefix: '/api' },
   );
