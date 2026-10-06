@@ -4,6 +4,7 @@ import { useNow } from '../../hooks/useNow';
 import { useBoard } from '../../stores/board';
 import { ActiveSession } from './ActiveSession';
 import { LightControl } from './LightControl';
+import { BookedPanel } from './BookedPanel';
 import { StartSession } from './StartSession';
 import { STATUS_STYLE, unitStatusOf } from './status';
 
@@ -34,7 +35,8 @@ export function UnitPanel() {
         </div>
       )}
       {status === 'MAINTENANCE' && <p className="rounded-xl bg-gray-100 p-3 text-sm text-gray-700">Sedang maintenance — tidak bisa dipakai.</p>}
-      {status === 'IDLE' && <StartSession key={unit.id} unit={unit} />}
+      {status === 'IDLE' &&
+        (unit.booking ? <BookedPanel key={unit.id} unit={unit} booking={unit.booking} /> : <StartSession key={unit.id} unit={unit} />)}
       {unit.session && <ActiveSession key={unit.id} unit={unit} session={unit.session} status={status} now={now} />}
       <LightControl key={`light-${unit.id}`} unit={unit} />
     </aside>

@@ -37,3 +37,19 @@ it('meja kosong dan device offline', () => {
   expect(screen.getByTestId('unit-card-Meja 1')).toHaveAttribute('data-status', 'IDLE');
   expect(screen.getByLabelText('Device offline')).toBeInTheDocument();
 });
+
+it('meja di-hold: cyan, teks Booked dengan ikon DP, status tetap IDLE', () => {
+  render(
+    <UnitCard
+      unit={{ ...base, session: null, booking: { id: 'bk1', customerName: 'Budi', startAt: '2026-10-01T12:00:00.000Z', durationMin: 60, depositPaid: true } }}
+      now={new Date('2026-10-01T11:50:00.000Z')}
+      selected={false}
+      onSelect={() => {}}
+    />,
+  );
+  const card = screen.getByTestId('unit-card-Meja 1');
+  expect(card).toHaveAttribute('data-status', 'IDLE');
+  expect(card).toHaveAttribute('data-booked', 'true');
+  expect(card).toHaveTextContent('Booked · Budi 19:00 💰');
+  expect(card.className).toContain('bg-[#CFFAFE]');
+});
