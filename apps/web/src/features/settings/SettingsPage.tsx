@@ -2,10 +2,14 @@ import { useState } from 'react';
 import { cn } from '../../lib/cn';
 import { CrudResource } from './CrudResource';
 import { GeneralSettings } from './GeneralSettings';
+import { PrinterSettings } from './PrinterSettings';
 import { RESOURCES } from './resources';
+import { TransactionSettings } from './TransactionSettings';
 
 const TABS = [
   { key: 'general', label: 'Umum' },
+  { key: 'transaction', label: 'Pajak & Service' },
+  { key: 'printer', label: 'Struk & Printer' },
   { key: 'unitTypes', label: 'Tipe' },
   { key: 'units', label: 'Meja / Unit' },
   { key: 'devices', label: 'Device' },
@@ -30,7 +34,7 @@ export function SettingsPage() {
           </button>
         ))}
       </div>
-      {tab === 'general' ? <GeneralSettings /> : <CrudResource key={tab} config={RESOURCES[tab]} />}
+      {tab === 'general' ? <GeneralSettings /> : tab === 'transaction' ? <TransactionSettings /> : tab === 'printer' ? <PrinterSettings /> : <CrudResource key={tab} config={RESOURCES[tab]} />}
     </div>
   );
 }

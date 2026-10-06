@@ -75,4 +75,28 @@ export const RESOURCES = {
       { name: 'active', label: 'Aktif', type: 'checkbox' },
     ],
   },
+  categories: {
+    title: 'Kategori',
+    path: '/categories',
+    canDelete: true,
+    fields: [
+      { name: 'name', label: 'Nama', type: 'text', required: true },
+      { name: 'color', label: 'Warna (#RRGGBB)', type: 'text', defaultValue: '#7C3AED' },
+      { name: 'sortOrder', label: 'Urutan', type: 'number', defaultValue: '0' },
+      { name: 'active', label: 'Aktif', type: 'checkbox' },
+    ],
+  },
+  products: {
+    title: 'Produk & Layanan',
+    path: '/products',
+    canDelete: true,
+    fields: [
+      { name: 'name', label: 'Nama', type: 'text', required: true },
+      { name: 'categoryId', label: 'Kategori', type: 'select', required: true, optionsFrom: { path: '/categories', label: (r: { name: string }) => r.name } },
+      { name: 'kind', label: 'Jenis', type: 'select', defaultValue: 'STOCK', options: [{ value: 'STOCK', label: 'Stok (FnB)' }, { value: 'SERVICE', label: 'Layanan (tanpa stok)' }] },
+      { name: 'price', label: 'Harga', type: 'money', required: true },
+      { name: 'stockQty', label: 'Stok', type: 'number', defaultValue: '0' },
+      { name: 'active', label: 'Aktif', type: 'checkbox' },
+    ],
+  },
 } satisfies Record<string, ResourceConfig>;

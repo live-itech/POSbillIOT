@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
-import { LayoutGrid, LogOut, Moon, Settings, Wallet } from 'lucide-react';
+import { Coffee, LayoutGrid, LogOut, Moon, Settings, Wallet } from 'lucide-react';
 import { NavLink, Outlet } from 'react-router';
 import { Logo } from '../../components/brand/Brand';
 import { Button } from '../../components/ui/button';
@@ -38,6 +38,7 @@ export function AppShell() {
   const items = [
     { to: '/', label: 'Meja', icon: LayoutGrid, show: true },
     { to: '/shift', label: 'Shift', icon: Wallet, show: true },
+    { to: '/products', label: 'Produk', icon: Coffee, show: me.role !== 'KASIR' },
     { to: '/settings', label: 'Pengaturan', icon: Settings, show: me.role === 'OWNER' },
   ];
 
