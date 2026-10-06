@@ -127,6 +127,8 @@ export interface ShiftSummary {
   voids: Record<PaymentMethod, number>;
   billCount: number;
   voidCount: number;
+  /** Σ kembalian DP booking (tunai keluar) dari pembayaran DEPOSIT di shift ini. */
+  depositChange: number;
   expectedCash: number;
 }
 

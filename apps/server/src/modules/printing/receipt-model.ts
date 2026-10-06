@@ -27,6 +27,8 @@ export async function buildReceiptModel(db: Db, billId: string, settings: Public
     printedAt: formatReceiptDate(b.paidAt ?? now, off),
     cashier: names.get(b.paidById ?? b.createdById) ?? '-',
     label: b.label,
+    title: b.kind === 'DEPOSIT' ? 'TANDA TERIMA DP' : null,
+    member: b.memberName ? { name: b.memberName, levelName: b.memberLevelName ?? '' } : null,
     sessions: b.sessions
       .filter((s) => s.endedAt)
       .map((s) => ({ unitName: s.unit.name, start: localHHMM(s.startedAt, off), end: localHHMM(s.endedAt!, off) })),
@@ -36,6 +38,7 @@ export async function buildReceiptModel(db: Db, billId: string, settings: Public
       unitPrice: l.unitPrice,
       amount: l.unitPrice * l.qty,
       discount: totals.lines[i]!.itemDiscount,
+      memberDiscount: totals.lines[i]!.memberDiscount,
       details: ((l.breakdown as ChargeLine[] | null) ?? []).map((c) => `${c.label} ${minutesLabel(c.minutes)}`),
     })),
     subtotal: b.subtotal,
@@ -44,7 +47,8 @@ export async function buildReceiptModel(db: Db, billId: string, settings: Public
     taxTotal: b.taxTotal,
     grandTotal: b.grandTotal,
     payments: b.payments.map((p) => ({ label: p.reference ? `${PAYMENT_METHOD_LABEL[p.method]} ${p.reference}` : PAYMENT_METHOD_LABEL[p.method], amount: p.received ?? p.amount })),
-    change: b.payments.reduce((a, p) => a + (p.change ?? 0), 0),
+    change: b.payments.filter((p) => p.method === 'CASH').reduce((a, p) => a + (p.change ?? 0), 0),
+    depositChange: b.payments.filter((p) => p.method === 'DEPOSIT').reduce((a, p) => a + (p.change ?? 0), 0),
     copy: b.status === 'VOID' ? 'VOID' : reprint ? 'REPRINT' : null,
   };
 }
@@ -54,7 +58,8 @@ export async function buildShiftReportModel(db: Db, shiftId: string, settings: P
   if (!s) throw notFound('Shift');
   const sum = await shiftSummary(db, s);
   const off = settings.utcOffsetMin;
-  const rows = (rec: Record<string, number>) => PAYMENT_METHODS.filter((m) => rec[m]).map((m) => ({ label: PAYMENT_METHOD_LABEL[m], amount: rec[m]! }));
+  const label = (m: (typeof PAYMENT_METHODS)[number]) => (m === 'DEPOSIT' ? 'DP booking (non-kas)' : PAYMENT_METHOD_LABEL[m]);
+  const rows = (rec: Record<string, number>) => PAYMENT_METHODS.filter((m) => rec[m]).map((m) => ({ label: label(m), amount: rec[m]! }));
   return {
     outletName: settings.outletName,
     openedAt: formatReceiptDate(s.openedAt, off),
@@ -69,5 +74,6 @@ export async function buildShiftReportModel(db: Db, shiftId: string, settings: P
     expectedCash: s.expectedCash ?? sum.expectedCash,
     countedCash: s.countedCash ?? 0,
     note: s.note,
+    depositChange: sum.depositChange,
   };
 }

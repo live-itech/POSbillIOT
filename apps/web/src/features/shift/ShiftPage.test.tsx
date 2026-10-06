@@ -12,7 +12,7 @@ const summary: ShiftSummary = {
   sales: { CASH: 56000, QRIS: 26000, CARD: 0, TRANSFER: 0, DEPOSIT: 0 },
   voids: { CASH: 0, QRIS: 0, CARD: 0, TRANSFER: 0, DEPOSIT: 0 },
   billCount: 2,
-  voidCount: 0,
+  voidCount: 0, depositChange: 0,
   expectedCash: 156000,
 };
 
@@ -48,4 +48,24 @@ it('menampilkan kas seharusnya, selisih, dan menutup shift', async () => {
     const call = fetchMock.mock.calls.find(([u]) => u === '/api/shifts/current/close');
     expect(JSON.parse(String(call![1]!.body))).toEqual({ countedCash: 150000 });
   });
+});
+
+it('DP booking ditandai non-kas dan kembalian DP ditampilkan', async () => {
+  const withDp: ShiftSummary = { ...summary, sales: { ...summary.sales, DEPOSIT: 40000 }, depositChange: 10000, expectedCash: 146000 };
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+    const json = (b: unknown) => new Response(JSON.stringify(b), { status: 200, headers: { 'content-type': 'application/json' } });
+    if (url === '/api/shifts/current') return json({ summary: withDp });
+    if (url === '/api/shifts') return json([]);
+    return new Response('{}', { status: 404 });
+  }));
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <MemoryRouter>
+        <ShiftPage />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+  expect(await screen.findByText('Penjualan DP booking (non-kas)')).toBeInTheDocument();
+  expect(screen.getByText('Kembalian DP (tunai keluar)')).toBeInTheDocument();
+  expect(screen.getByText('-Rp 10.000')).toBeInTheDocument();
 });

@@ -55,11 +55,14 @@ export async function shiftSummary(db: Db, s: Shift): Promise<ShiftSummary> {
   for (const g of await db.payment.groupBy({ by: ['method'], where: { bill: { voidShiftId: s.id } }, _sum: { amount: true } })) {
     voids[g.method] = g._sum.amount ?? 0;
   }
+  const depositChange = (await db.payment.aggregate({ where: { shiftId: s.id, method: 'DEPOSIT' }, _sum: { change: true } }))._sum.change ?? 0;
   const [billCount, voidCount] = await Promise.all([
     db.bill.count({ where: { shiftId: s.id, status: { in: ['PAID', 'VOID'] } } }),
     db.bill.count({ where: { voidShiftId: s.id } }),
   ]);
-  return { shift: await toShiftView(db, s), sales, voids, billCount, voidCount, expectedCash: s.openingCash + sales.CASH - voids.CASH };
+  // Kas seharusnya (spec M3 §4.4): DEPOSIT non-kas; kembalian DP dan DP yang dikembalikan saat void keluar tunai.
+  const expectedCash = s.openingCash + sales.CASH - voids.CASH - depositChange - voids.DEPOSIT;
+  return { shift: await toShiftView(db, s), sales, voids, billCount, voidCount, depositChange, expectedCash };
 }
 
 export class ShiftService {

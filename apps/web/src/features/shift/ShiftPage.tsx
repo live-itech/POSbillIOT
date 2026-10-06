@@ -41,8 +41,9 @@ function CurrentShift({ s }: { s: ShiftSummary }) {
         <h2 className="mb-3 text-lg font-extrabold">Shift berjalan · {s.shift.openedByName}</h2>
         <Row label="Kas awal" value={formatRupiah(s.shift.openingCash)} />
         {PAYMENT_METHODS.map((m) => (
-          <Row key={m} label={`Penjualan ${PAYMENT_METHOD_LABEL[m]}`} value={formatRupiah(s.sales[m])} />
+          <Row key={m} label={`Penjualan ${m === 'DEPOSIT' ? 'DP booking (non-kas)' : PAYMENT_METHOD_LABEL[m]}`} value={formatRupiah(s.sales[m])} />
         ))}
+        {s.depositChange > 0 && <Row label="Kembalian DP (tunai keluar)" value={`-${formatRupiah(s.depositChange)}`} />}
         {PAYMENT_METHODS.filter((m) => s.voids[m] > 0).map((m) => (
           <Row key={m} label={`Void ${PAYMENT_METHOD_LABEL[m]}`} value={`-${formatRupiah(s.voids[m])}`} />
         ))}
