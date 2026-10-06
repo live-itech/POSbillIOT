@@ -19,6 +19,9 @@ const fields = {
 const createSchema = z.object({ ...fields, depositAmount: z.number().int().min(0).max(100_000_000).default(0) });
 const patchSchema = z.object(fields).partial();
 const checkInSchema = z.object({ mode: z.enum(SESSION_MODES), packageId: z.string().min(1).optional() });
+const reason = z.string().trim().min(1, 'Alasan wajib diisi').max(200);
+const cancelSchema = z.object({ reason, deposit: z.enum(['FORFEIT', 'REFUND']).default('FORFEIT'), approvalPin: z.string().optional() });
+const refundSchema = z.object({ reason, approvalPin: z.string().optional() });
 const listSchema = z.object({ from: z.string().datetime(), to: z.string().datetime(), status: z.enum(BOOKING_STATUSES).optional() });
 
 export function bookingsRoutes(ctx: AppContext): FastifyPluginAsync {
@@ -37,5 +40,9 @@ export function bookingsRoutes(ctx: AppContext): FastifyPluginAsync {
       const r = await ctx.bookings.checkIn(req.user!, id, checkInSchema.parse(req.body));
       return { unit: await buildUnitView(ctx, r.unitId), booking: await ctx.bookings.get(id) };
     });
+    app.post('/bookings/:id/cancel', auth, async (req) => ctx.bookings.cancel(req.user!, idParam.parse(req.params).id, cancelSchema.parse(req.body)));
+    app.post('/bookings/:id/refund-deposit', auth, async (req) =>
+      ctx.bookings.refundDeposit(req.user!, idParam.parse(req.params).id, refundSchema.parse(req.body)),
+    );
   };
 }

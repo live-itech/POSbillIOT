@@ -92,7 +92,9 @@ export interface DeviceStatusView {
   lastSeenAt: string | null;
 }
 
-export type AlertType = 'SESSION_WARNING' | 'SESSION_EXPIRED' | 'DEVICE_OFFLINE' | 'DEVICE_ONLINE' | 'DEVICE_CMD_FAILED' | 'UNEXPECTED_ON';
+export type AlertType =
+  | 'SESSION_WARNING' | 'SESSION_EXPIRED' | 'DEVICE_OFFLINE' | 'DEVICE_ONLINE' | 'DEVICE_CMD_FAILED' | 'UNEXPECTED_ON'
+  | 'BOOKING_UPCOMING' | 'BOOKING_NO_SHOW';
 export interface AlertEvent {
   id: string;
   at: string;

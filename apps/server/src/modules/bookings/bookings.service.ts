@@ -1,11 +1,13 @@
 import {
-  addMinutes, bookingsOverlap, bookingWindow, formatReceiptDate, holdStartsAt, isOnHold, localHHMM,
-  type BookingStatus, type BookingView, type CreateBookingResult, type PublicUser, type SessionMode,
+  addMinutes, bookingsOverlap, bookingWindow, formatReceiptDate, holdStartsAt, isNoShowDue, isOnHold, localHHMM,
+  type BookingStatus, type BookingView, type CreateBookingResult, type PublicSettings, type PublicUser, type SessionMode,
 } from '@funplay/shared';
 import type { AppContext } from '../../context';
 import type { Db } from '../../db';
-import { badRequest, conflict, notFound } from '../../lib/errors';
+import { emitAlert } from '../../lib/alerts';
+import { AppError, badRequest, conflict, notFound } from '../../lib/errors';
 import { audit } from '../audit/audit';
+import { approveWithPin } from '../auth/auth.service';
 import { lockBill } from '../billing/bill-view';
 import { requireActiveMember } from '../members/members.service';
 import { nextBillNumber, rethrowBusy } from '../sessions/sessions.service';
@@ -243,5 +245,145 @@ export class BookingService {
     this.changed(id);
     if (r.cancelledDepositBillId) this.ctx.bus.emit('bill.changed', r.cancelledDepositBillId);
     return { unitId: r.unitId };
+  }
+
+  /**
+   * Batalkan booking BOOKED. Urutan kunci: bill DEPOSIT → Booking → (void: Shift). Bill DP yang masih OPEN
+   * ikut dibatalkan; DP yang sudah dibayar hangus (FORFEIT) atau dikembalikan lewat void bill DEPOSIT (REFUND).
+   */
+  async cancel(user: PublicUser, id: string, input: { reason: string; deposit: 'FORFEIT' | 'REFUND'; approvalPin?: string }): Promise<BookingView> {
+    const { prisma, clock } = this.ctx;
+    const pre = await prisma.booking.findUnique({ where: { id } });
+    if (!pre) throw notFound('Booking');
+    const depPre = pre.depositBillId ? await prisma.bill.findUnique({ where: { id: pre.depositBillId }, select: { status: true } }) : null;
+    // PIN di luar transaksi (approveWithPin menulis ke tabel User); status DP diperiksa ulang di bawah kunci.
+    const approvedById = depPre?.status === 'PAID' ? await approveWithPin(prisma, clock, user, input.approvalPin) : null;
+    const r = await prisma.$transaction(async (tx) => {
+      if (pre.depositBillId) await lockBill(tx, pre.depositBillId);
+      await lockBooking(tx, id);
+      const bk = await tx.booking.findUniqueOrThrow({ where: { id } });
+      if (bk.status !== 'BOOKED') throw conflict('BOOKING_NOT_ACTIVE', 'Booking sudah tidak aktif');
+      const dep = bk.depositBillId ? await tx.bill.findUniqueOrThrow({ where: { id: bk.depositBillId } }) : null;
+      let outcome = bk.depositOutcome;
+      let voided = false;
+      if (dep?.status === 'OPEN') {
+        await tx.bill.update({ where: { id: dep.id }, data: { status: 'CANCELLED', cancelReason: `Booking dibatalkan: ${input.reason}` } });
+      }
+      const dpPaid = dep?.status === 'PAID' && bk.depositOutcome === null;
+      if (dep && dpPaid) {
+        if (!approvedById) throw new AppError(403, 'APPROVAL_REQUIRED', 'Aksi ini butuh PIN supervisor');
+        if (input.deposit === 'REFUND') {
+          await this.ctx.checkout.voidTx(tx, user, dep.id, `Booking dibatalkan: ${input.reason}`, approvedById);
+          outcome = 'REFUNDED';
+          voided = true;
+        } else {
+          outcome = 'FORFEITED';
+        }
+      }
+      await tx.booking.update({ where: { id }, data: { status: 'CANCELLED', cancelReason: input.reason, depositOutcome: outcome } });
+      await audit(tx, {
+        userId: user.id, action: 'booking.cancel', entity: 'Booking', entityId: id, approvedById,
+        data: { reason: input.reason, deposit: dpPaid ? input.deposit : null },
+      });
+      return { unitId: bk.unitId, depositBillId: bk.depositBillId, voided };
+    });
+    if (r.depositBillId) this.ctx.bus.emit('bill.changed', r.depositBillId);
+    if (r.voided) this.ctx.bus.emit('shift.changed');
+    this.changed(id, r.unitId);
+    return loadBookingView(prisma, id);
+  }
+
+  /**
+   * Kembalikan DP lewat void bill DEPOSIT (PIN untuk kasir). Boleh bila DP hangus (NO_SHOW/CANCELLED) atau
+   * booking sudah check-in tetapi DP belum dipakai. Urutan kunci: bill DEPOSIT → Booking → Shift.
+   */
+  async refundDeposit(user: PublicUser, id: string, input: { reason: string; approvalPin?: string }): Promise<BookingView> {
+    const { prisma, clock } = this.ctx;
+    const pre = await prisma.booking.findUnique({ where: { id } });
+    if (!pre) throw notFound('Booking');
+    if (!pre.depositBillId) throw conflict('DEPOSIT_NOT_AVAILABLE', 'Booking ini tidak memakai DP');
+    const depositBillId = pre.depositBillId;
+    const approvedById = await approveWithPin(prisma, clock, user, input.approvalPin);
+    const r = await prisma.$transaction(async (tx) => {
+      await lockBill(tx, depositBillId);
+      await lockBooking(tx, id);
+      const bk = await tx.booking.findUniqueOrThrow({ where: { id } });
+      const dep = await tx.bill.findUniqueOrThrow({ where: { id: depositBillId } });
+      const forfeited = (bk.status === 'NO_SHOW' || bk.status === 'CANCELLED') && bk.depositOutcome === 'FORFEITED';
+      const unusedAfterCheckIn = bk.status === 'CHECKED_IN' && bk.depositOutcome === null;
+      if (dep.status !== 'PAID' || !(forfeited || unusedAfterCheckIn)) throw conflict('DEPOSIT_NOT_AVAILABLE', 'DP tidak bisa dikembalikan');
+      await this.ctx.checkout.voidTx(tx, user, dep.id, `Pengembalian DP: ${input.reason}`, approvedById);
+      await audit(tx, {
+        userId: user.id, action: 'booking.refund_deposit', entity: 'Booking', entityId: id, approvedById,
+        data: { reason: input.reason, amount: bk.depositAmount },
+      });
+      return { unitId: bk.unitId };
+    });
+    this.ctx.bus.emit('bill.changed', depositBillId);
+    this.ctx.bus.emit('shift.changed');
+    this.changed(id, r.unitId);
+    return loadBookingView(prisma, id);
+  }
+
+  /** Dipanggil scheduler setiap tick: notifikasi saat hold dimulai (sekali), lalu no-show otomatis. */
+  async runDue(now: Date, settings: PublicSettings): Promise<void> {
+    const { prisma, clock, bus } = this.ctx;
+    const upcoming = await prisma.booking.findMany({
+      where: {
+        status: 'BOOKED',
+        holdNotifiedAt: null,
+        startAt: { lte: addMinutes(now, settings.bookingHoldMin), gt: addMinutes(now, -settings.bookingNoShowMin) },
+      },
+      include: { unit: { select: { name: true } } },
+    });
+    for (const x of upcoming) {
+      const w = await prisma.booking.updateMany({ where: { id: x.id, status: 'BOOKED', holdNotifiedAt: null, startAt: x.startAt }, data: { holdNotifiedAt: now } });
+      if (w.count === 0) continue;
+      emitAlert(bus, clock, {
+        level: 'info', type: 'BOOKING_UPCOMING', unitId: x.unitId,
+        message: `Booking ${x.customerName} di ${x.unit.name} jam ${localHHMM(x.startAt, settings.utcOffsetMin)}`,
+      });
+      this.changed(x.id, x.unitId);
+    }
+    const due = await prisma.booking.findMany({
+      where: { status: 'BOOKED', startAt: { lte: addMinutes(now, -settings.bookingNoShowMin) } },
+      select: { id: true },
+    });
+    for (const d of due) {
+      try {
+        await this.markNoShow(d.id, now, settings);
+      } catch (err) {
+        console.error(`[scheduler] no-show booking ${d.id} gagal`, err);
+      }
+    }
+  }
+
+  /** Urutan kunci: bill DEPOSIT → Booking; status diperiksa ulang (check-in/batal/ubah jadwal bisa menang). */
+  private async markNoShow(id: string, now: Date, settings: PublicSettings): Promise<void> {
+    const { prisma, clock, bus } = this.ctx;
+    const pre = await prisma.booking.findUnique({ where: { id } });
+    if (!pre) return;
+    const r = await prisma.$transaction(async (tx) => {
+      if (pre.depositBillId) await lockBill(tx, pre.depositBillId);
+      await lockBooking(tx, id);
+      const bk = await tx.booking.findUniqueOrThrow({ where: { id }, include: { unit: { select: { name: true } } } });
+      if (!isNoShowDue(bk, now, settings.bookingNoShowMin)) return null;
+      const dep = bk.depositBillId ? await tx.bill.findUniqueOrThrow({ where: { id: bk.depositBillId } }) : null;
+      if (dep?.status === 'OPEN') {
+        await tx.bill.update({ where: { id: dep.id }, data: { status: 'CANCELLED', cancelReason: 'Booking tidak datang (no-show)' } });
+      }
+      const forfeit = dep?.status === 'PAID' && bk.depositOutcome === null;
+      await tx.booking.update({ where: { id }, data: { status: 'NO_SHOW', ...(forfeit ? { depositOutcome: 'FORFEITED' as const } : {}) } });
+      await audit(tx, { userId: null, action: 'booking.no_show', entity: 'Booking', entityId: id, data: { depositForfeited: forfeit } });
+      return {
+        unitId: bk.unitId,
+        message: `No-show: ${bk.customerName} di ${bk.unit.name} jam ${localHHMM(bk.startAt, settings.utcOffsetMin)}`,
+        cancelledDepositBillId: dep?.status === 'OPEN' ? dep.id : null,
+      };
+    });
+    if (!r) return;
+    emitAlert(bus, clock, { level: 'warning', type: 'BOOKING_NO_SHOW', unitId: r.unitId, message: r.message });
+    if (r.cancelledDepositBillId) bus.emit('bill.changed', r.cancelledDepositBillId);
+    this.changed(id, r.unitId);
   }
 }

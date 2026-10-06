@@ -46,6 +46,11 @@ export class Scheduler {
         console.error(`[scheduler] sesi ${s.id} gagal diproses`, err);
       }
     }
+    try {
+      await this.ctx.bookings.runDue(now, settings);
+    } catch (err) {
+      console.error('[scheduler] booking gagal diproses', err);
+    }
   }
 
   private async process(
