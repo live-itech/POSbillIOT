@@ -5,6 +5,7 @@ import { RequireAuth, RequireRole } from './features/auth/auth';
 import { BoardPage } from './features/board/BoardPage';
 import { LoginPage } from './features/auth/LoginPage';
 import { AppShell } from './features/layout/AppShell';
+import { ShiftPage } from './features/shift/ShiftPage';
 import { SettingsPage } from './features/settings/SettingsPage';
 
 export function App() {
@@ -20,6 +21,7 @@ export function App() {
           }
         >
           <Route index element={<BoardPage />} />
+          <Route path="shift" element={<ShiftPage />} />
           <Route
             path="settings"
             element={

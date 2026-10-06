@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatDuration, formatMinutes, formatRupiah } from './format';
+import { formatDuration, formatMinutes, formatRupiah, parseRupiah } from './format';
 
 describe('format', () => {
   it('formatRupiah memakai titik ribuan', () => {
@@ -7,6 +7,11 @@ describe('format', () => {
     expect(formatRupiah(1250000)).toBe('Rp 1.250.000');
     expect(formatRupiah(0)).toBe('Rp 0');
     expect(formatRupiah(-5000)).toBe('-Rp 5.000');
+  });
+  it('parseRupiah hanya mengambil digit', () => {
+    expect(parseRupiah('150.000')).toBe(150000);
+    expect(parseRupiah('Rp 20.000')).toBe(20000);
+    expect(parseRupiah('')).toBe(0);
   });
   it('formatDuration HH:MM:SS', () => {
     expect(formatDuration(0)).toBe('00:00:00');

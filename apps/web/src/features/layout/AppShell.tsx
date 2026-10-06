@@ -1,15 +1,18 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
-import { LayoutGrid, LogOut, Moon, Settings } from 'lucide-react';
+import { LayoutGrid, LogOut, Moon, Settings, Wallet } from 'lucide-react';
 import { NavLink, Outlet } from 'react-router';
 import { Logo } from '../../components/brand/Brand';
 import { Button } from '../../components/ui/button';
 import { cn } from '../../lib/cn';
 import { beep } from '../../lib/beep';
+import { handleRealtime } from '../../lib/events';
 import { connectBoard } from '../../lib/socket';
 import { toggleTheme } from '../../lib/theme';
 import { toast } from '../../stores/toast';
 import { useLogout, useMe } from '../auth/auth';
+import { OpenShiftDialog } from '../shift/OpenShiftDialog';
+import { ShiftChip } from '../shift/ShiftChip';
 
 const ROLE_LABEL = { KASIR: 'Kasir', SUPERVISOR: 'Supervisor', OWNER: 'Owner' } as const;
 
@@ -28,11 +31,13 @@ export function AppShell() {
         },
         // Sesi kedaluwarsa: cek ulang auth agar RequireAuth mengarahkan ke login.
         () => void qc.invalidateQueries({ queryKey: ['me'] }),
+        (e) => handleRealtime(qc, e),
       ),
     [qc],
   );
   const items = [
     { to: '/', label: 'Meja', icon: LayoutGrid, show: true },
+    { to: '/shift', label: 'Shift', icon: Wallet, show: true },
     { to: '/settings', label: 'Pengaturan', icon: Settings, show: me.role === 'OWNER' },
   ];
 
@@ -58,6 +63,7 @@ export function AppShell() {
         <header className="flex items-center justify-between border-b border-line bg-surface px-4 py-2">
           <Logo className="h-8" />
           <div className="flex items-center gap-2 text-sm">
+            <ShiftChip />
             <span className="rounded-full bg-primary-soft px-3 py-1 font-semibold text-primary-ink">
               {me.name} · {ROLE_LABEL[me.role]}
             </span>
@@ -73,6 +79,7 @@ export function AppShell() {
           <Outlet />
         </main>
       </div>
+      <OpenShiftDialog />
     </div>
   );
 }

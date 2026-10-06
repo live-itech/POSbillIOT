@@ -18,3 +18,9 @@ export function formatMinutes(min: number): string {
   if (!h) return `${m} menit`;
   return m ? `${h} jam ${m} menit` : `${h} jam`;
 }
+
+/** Ambil angka dari input uang ("150.000", "Rp 20.000"); kosong → 0. */
+export function parseRupiah(s: string): number {
+  const digits = s.replace(/\D/g, '');
+  return digits ? Number(digits) : 0;
+}

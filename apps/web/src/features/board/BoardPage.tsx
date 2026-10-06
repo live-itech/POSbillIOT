@@ -1,4 +1,5 @@
 import { outletLabels } from '@funplay/shared';
+import { NoShiftBanner } from '../shift/ShiftChip';
 import { useMemo, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { Illustration, UnitTypeIcon } from '../../components/brand/Brand';
@@ -28,6 +29,7 @@ export function BoardPage() {
           Koneksi ke server terputus — mencoba menyambung ulang…
         </div>
       )}
+      <NoShiftBanner />
       <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[1fr_380px]">
         <section className="flex min-h-0 flex-col gap-3">
           <div className="flex flex-wrap gap-2">
