@@ -22,6 +22,13 @@ pnpm test        # unit + integrasi (DB funplay_test)
 pnpm e2e         # Playwright (DB funplay_e2e)
 ```
 
+## Fitur transaksi (M2)
+- **Shift:** satu shift terbuka untuk seluruh outlet. Buka shift (kas awal) dari tombol di header; tutup dari menu Shift (kas fisik → selisih, rekap tercetak).
+- **Pesanan & bayar:** di panel meja: **+ Pesan**, **Stop** (bill tetap belum dibayar), **Stop & Bayar**. Bill tanpa sesi muncul di strip "Belum dibayar". Tagihan lepas lewat **+ Transaksi baru**.
+- **Checkout:** diskon item/bill, gabung bill, split payment (Tunai, QRIS, Kartu, Transfer). Diskon di atas batas, hapus item, batal, dan void butuh PIN supervisor untuk kasir.
+- **Struk:** Pengaturan → *Struk & Printer*. Driver **Simulator** menampilkan struk lewat tombol **Struk** di layar; **USB** menulis ke device file di server (mis. `/dev/usb/lp0`, user server perlu akses grup `lp`); **LAN** mengirim ESC/POS ke `host:9100`. Gunakan **Tes cetak** setelah menyimpan.
+- **Pajak & service:** Pengaturan → *Pajak & Service* (persen + cakupan). Urutan hitung: subtotal → diskon → service → pajak.
+
 ## Produksi (sementara, sebelum M5)
 `pnpm start` membaca `apps/server/.env` — salin dulu dari contoh (`cp apps/server/.env.example apps/server/.env`) lalu isi `DATABASE_URL` dan `COOKIE_SECRET` untuk produksi.
 ```bash

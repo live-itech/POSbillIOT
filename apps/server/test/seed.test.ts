@@ -20,6 +20,7 @@ it('seed playstation memakai tipe PS4/PS5', async () => {
   const types = (await prisma.unitType.findMany({ orderBy: { name: 'asc' } })).map((t) => t.name);
   expect(types).toEqual(['PS4', 'PS5']);
   expect((await prisma.unit.findFirstOrThrow({ orderBy: { sortOrder: 'asc' } })).name).toBe('PS4 #1');
+  expect(await prisma.product.findUnique({ where: { name: 'Stik Tambahan' } })).toMatchObject({ kind: 'SERVICE', price: 5000 });
 });
 
 it('seed menyediakan data yang dipakai E2E', async () => {
@@ -31,6 +32,10 @@ it('seed menyediakan data yang dipakai E2E', async () => {
   expect(await verifySecret(kasir.passwordHash, 'kasir123')).toBe(true);
   const spv = await prisma.user.findUniqueOrThrow({ where: { username: 'supervisor' } });
   expect(await verifySecret(spv.pinHash!, '1111')).toBe(true);
+  const teh = await prisma.product.findUniqueOrThrow({ where: { name: 'Es Teh Manis' }, include: { category: true } });
+  expect(teh).toMatchObject({ price: 8000, kind: 'STOCK', category: { name: 'Minuman' } });
+  expect((await prisma.product.findUniqueOrThrow({ where: { name: 'Kopi Susu' } })).price).toBe(15000);
+  expect(await prisma.product.findUnique({ where: { name: 'Sewa Stick Premium' } })).toMatchObject({ kind: 'SERVICE' });
 });
 
 it('seed gagal di tengah jalan di-rollback penuh', async () => {
