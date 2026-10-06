@@ -2,12 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { cashPayment, checkPayments } from './payment';
 
 describe('checkPayments', () => {
-  it('DP booking ditolak tanpa konteks booking', () => {
-    expect(checkPayments(10000, [{ method: 'DEPOSIT', amount: 10000 }])).toMatchObject({ ok: false, code: 'PAYMENT_INVALID' });
-  });
   it('tunai dengan kembalian', () => {
     const r = checkPayments(79920, [{ method: 'CASH', amount: 79920, received: 100000 }]);
-    expect(r).toEqual({ ok: true, paid: 79920, change: 20080, payments: [{ method: 'CASH', amount: 79920, received: 100000, change: 20080, reference: null }] });
+    expect(r).toEqual({ ok: true, paid: 79920, change: 20080, depositChange: 0, payments: [{ method: 'CASH', amount: 79920, received: 100000, change: 20080, reference: null }] });
   });
 
   it('split tunai + QRIS', () => {
@@ -45,8 +42,40 @@ describe('checkPayments', () => {
   });
 
   it('total 0 boleh tanpa pembayaran', () => {
-    expect(checkPayments(0, [])).toEqual({ ok: true, paid: 0, change: 0, payments: [] });
+    expect(checkPayments(0, [])).toEqual({ ok: true, paid: 0, change: 0, depositChange: 0, payments: [] });
     expect(checkPayments(5000, [])).toMatchObject({ ok: false, code: 'PAYMENT_INSUFFICIENT' });
+  });
+});
+
+describe('checkPayments — DP booking (DEPOSIT)', () => {
+  it('DP < total: DP utuh + sisa tunai', () => {
+    const r = checkPayments(80000, [{ method: 'DEPOSIT', amount: 50000, received: 50000 }, { method: 'CASH', amount: 30000 }], { deposit: 50000 });
+    expect(r).toMatchObject({ ok: true, paid: 80000, change: 0, depositChange: 0 });
+  });
+
+  it('DP > total: amount = total, kembalian DP terpisah dari kembalian tunai', () => {
+    const r = checkPayments(40000, [{ method: 'DEPOSIT', amount: 40000, received: 50000 }], { deposit: 50000 });
+    expect(r).toEqual({
+      ok: true, paid: 40000, change: 0, depositChange: 10000,
+      payments: [{ method: 'DEPOSIT', amount: 40000, received: 50000, change: 10000, reference: null }],
+    });
+  });
+
+  it('received kosong = DP utuh', () => {
+    expect(checkPayments(40000, [{ method: 'DEPOSIT', amount: 40000 }], { deposit: 50000 })).toMatchObject({ ok: true, depositChange: 10000 });
+  });
+
+  it('nominal selain min(DP, total) atau received ≠ DP ditolak', () => {
+    expect(checkPayments(80000, [{ method: 'DEPOSIT', amount: 30000, received: 50000 }, { method: 'CASH', amount: 50000 }], { deposit: 50000 })).toMatchObject({ ok: false, code: 'PAYMENT_INVALID' });
+    expect(checkPayments(40000, [{ method: 'DEPOSIT', amount: 40000, received: 40000 }], { deposit: 50000 })).toMatchObject({ ok: false, code: 'PAYMENT_INVALID' });
+  });
+
+  it('tanpa DP tersedia atau dipakai dua kali ditolak', () => {
+    expect(checkPayments(10000, [{ method: 'DEPOSIT', amount: 10000 }])).toMatchObject({ ok: false, code: 'PAYMENT_INVALID' });
+    expect(checkPayments(10000, [{ method: 'DEPOSIT', amount: 10000 }], { deposit: 0 })).toMatchObject({ ok: false, code: 'PAYMENT_INVALID' });
+    expect(
+      checkPayments(80000, [{ method: 'DEPOSIT', amount: 40000 }, { method: 'DEPOSIT', amount: 40000 }], { deposit: 40000 }),
+    ).toMatchObject({ ok: false, code: 'PAYMENT_INVALID' });
   });
 });
 

@@ -6,11 +6,12 @@ const time = (amount: number, id = 't'): TotalsLineInput => ({ id, scope: 'BILLI
 const fnb = (amount: number, id = 'f'): TotalsLineInput => ({ id, scope: 'FNB', amount, discount: null });
 
 describe('lineScope', () => {
-  it('TIME = BILLING, lainnya FNB', () => {
+  it('TIME = BILLING, DEPOSIT = PREPAID, lainnya FNB', () => {
     expect(lineScope('TIME')).toBe('BILLING');
     expect(lineScope('PRODUCT')).toBe('FNB');
     expect(lineScope('SERVICE')).toBe('FNB');
     expect(lineScope('CUSTOM')).toBe('FNB');
+    expect(lineScope('DEPOSIT')).toBe('PREPAID');
   });
 });
 
@@ -37,7 +38,7 @@ describe('allocate', () => {
 describe('computeBillTotals', () => {
   it('tanpa diskon/pajak: total = subtotal', () => {
     const t = computeBillTotals([time(50000), fnb(20000)], null, NO_TAX);
-    expect(t).toMatchObject({ subtotal: 70000, discountTotal: 0, serviceTotal: 0, taxTotal: 0, grandTotal: 70000 });
+    expect(t).toMatchObject({ subtotal: 70000, discountTotal: 0, memberDiscountTotal: 0, serviceTotal: 0, taxTotal: 0, grandTotal: 70000 });
   });
 
   it('diskon item lalu diskon bill dibagi proporsional', () => {
@@ -50,8 +51,8 @@ describe('computeBillTotals', () => {
     expect(t.itemDiscountTotal).toBe(2000);
     expect(t.billDiscountTotal).toBe(4000);
     expect(t.lines).toEqual([
-      { id: 'a', amount: 30000, itemDiscount: 0, billDiscount: 3000, net: 27000 },
-      { id: 'b', amount: 12000, itemDiscount: 2000, billDiscount: 1000, net: 9000 },
+      { id: 'a', amount: 30000, itemDiscount: 0, memberDiscount: 0, billDiscount: 3000, net: 27000 },
+      { id: 'b', amount: 12000, itemDiscount: 2000, memberDiscount: 0, billDiscount: 1000, net: 9000 },
     ]);
     expect(t).toMatchObject({ subtotal: 42000, discountTotal: 6000, grandTotal: 36000 });
   });
@@ -79,29 +80,68 @@ describe('computeBillTotals', () => {
     expect(computeBillTotals([], { type: 'AMOUNT', value: 5000 }, NO_TAX)).toMatchObject({ subtotal: 0, discountTotal: 0, grandTotal: 0, lines: [] });
   });
 
-  it('invarian untuk 300 input acak', () => {
+  it('diskon member: TIME pakai timePct, FNB pakai fnbPct, dibulatkan', () => {
+    const t = computeBillTotals([time(50000, 'a'), fnb(20000, 'b'), fnb(12345, 'c')], null, NO_TAX, { timePct: 10, fnbPct: 5 });
+    // 5000 + 1000 + round(617,25) = 617
+    expect(t.lines.map((l) => l.memberDiscount)).toEqual([5000, 1000, 617]);
+    expect(t.lines.map((l) => l.net)).toEqual([45000, 19000, 11728]);
+    expect(t).toMatchObject({ subtotal: 82345, memberDiscountTotal: 6617, discountTotal: 6617, grandTotal: 75728 });
+  });
+
+  it('baris dengan diskon item tidak mendapat diskon member', () => {
+    const t = computeBillTotals([{ ...fnb(20000, 'a'), discount: { type: 'AMOUNT', value: 2000 } }, fnb(10000, 'b')], null, NO_TAX, { timePct: 0, fnbPct: 10 });
+    expect(t.lines).toEqual([
+      { id: 'a', amount: 20000, itemDiscount: 2000, memberDiscount: 0, billDiscount: 0, net: 18000 },
+      { id: 'b', amount: 10000, itemDiscount: 0, memberDiscount: 1000, billDiscount: 0, net: 9000 },
+    ]);
+    expect(t).toMatchObject({ itemDiscountTotal: 2000, memberDiscountTotal: 1000, discountTotal: 3000, grandTotal: 27000 });
+  });
+
+  it('diskon member sebelum diskon bill; baris PREPAID di luar diskon, service, dan pajak', () => {
+    const t = computeBillTotals(
+      [{ id: 'dp', scope: 'PREPAID', amount: 50000, discount: { type: 'PERCENT', value: 50 } }, fnb(20000, 'f')],
+      { type: 'PERCENT', value: 10 },
+      { taxPct: 10, taxScope: 'ALL', servicePct: 10, serviceScope: 'ALL' },
+      { timePct: 10, fnbPct: 10 },
+    );
+    // f: member 2000 → 18000; bill 10% = 1800 → net 16200; service 1620; pajak 10% × (16200 + 1620) = 1782
+    expect(t.lines[0]).toEqual({ id: 'dp', amount: 50000, itemDiscount: 0, memberDiscount: 0, billDiscount: 0, net: 50000 });
+    expect(t.lines[1]).toEqual({ id: 'f', amount: 20000, itemDiscount: 0, memberDiscount: 2000, billDiscount: 1800, net: 16200 });
+    expect(t).toMatchObject({ subtotal: 70000, discountTotal: 3800, serviceTotal: 1620, taxTotal: 1782, grandTotal: 69602 });
+  });
+
+  it('invarian untuk 300 input acak (termasuk member & PREPAID)', () => {
     let seed = 42;
     const rnd = (n: number) => {
       seed = (seed * 1103515245 + 12345) % 2147483648;
       return seed % n;
     };
+    const lineScopes = ['BILLING', 'FNB', 'PREPAID'] as const;
     for (let k = 0; k < 300; k++) {
       const lines: TotalsLineInput[] = Array.from({ length: 1 + rnd(5) }, (_, i) => ({
         id: String(i),
-        scope: rnd(2) ? 'BILLING' : 'FNB',
+        scope: lineScopes[rnd(3)]!,
         amount: rnd(200000),
         discount: rnd(3) === 0 ? { type: rnd(2) ? 'PERCENT' : 'AMOUNT', value: rnd(2) ? rnd(101) : rnd(50000) } : null,
       }));
       const scopes = ['NONE', 'BILLING', 'FNB', 'ALL'] as const;
-      const t = computeBillTotals(lines, rnd(2) ? { type: 'PERCENT', value: rnd(101) } : { type: 'AMOUNT', value: rnd(100000) }, {
-        taxPct: rnd(21), taxScope: scopes[rnd(4)]!, servicePct: rnd(21), serviceScope: scopes[rnd(4)]!,
-      });
+      const member = rnd(2) ? { timePct: rnd(101), fnbPct: rnd(101) } : null;
+      const t = computeBillTotals(
+        lines,
+        rnd(2) ? { type: 'PERCENT', value: rnd(101) } : { type: 'AMOUNT', value: rnd(100000) },
+        { taxPct: rnd(21), taxScope: scopes[rnd(4)]!, servicePct: rnd(21), serviceScope: scopes[rnd(4)]! },
+        member,
+      );
       expect(t.grandTotal).toBe(t.subtotal - t.discountTotal + t.serviceTotal + t.taxTotal);
+      expect(t.discountTotal).toBe(t.itemDiscountTotal + t.memberDiscountTotal + t.billDiscountTotal);
       expect(t.lines.reduce((a, l) => a + l.net, 0)).toBe(t.subtotal - t.discountTotal);
       for (const v of [t.subtotal, t.discountTotal, t.serviceTotal, t.taxTotal, t.grandTotal]) {
         expect(Number.isInteger(v) && v >= 0).toBe(true);
       }
-      for (const l of t.lines) expect(l.net).toBeGreaterThanOrEqual(0);
+      t.lines.forEach((l, i) => {
+        expect(l.net).toBeGreaterThanOrEqual(0);
+        if (lines[i]!.scope === 'PREPAID') expect(l.net).toBe(l.amount);
+      });
     }
   });
 });
@@ -113,5 +153,14 @@ describe('needsDiscountApproval', () => {
     const more = computeBillTotals([fnb(70000)], { type: 'AMOUNT', value: 7001 }, NO_TAX);
     expect(needsDiscountApproval(more, 10)).toBe(true);
     expect(needsDiscountApproval(computeBillTotals([], null, NO_TAX), 10)).toBe(false);
+  });
+
+  it('mengabaikan diskon member', () => {
+    const member = computeBillTotals([fnb(70000)], null, NO_TAX, { timePct: 0, fnbPct: 50 });
+    expect(member.memberDiscountTotal).toBe(35000);
+    expect(needsDiscountApproval(member, 10)).toBe(false);
+    // diskon bill 7001 di atas diskon member 50% → 7001 > 10% × 70000
+    const extra = computeBillTotals([fnb(70000)], { type: 'AMOUNT', value: 7001 }, NO_TAX, { timePct: 0, fnbPct: 50 });
+    expect(needsDiscountApproval(extra, 10)).toBe(true);
   });
 });
