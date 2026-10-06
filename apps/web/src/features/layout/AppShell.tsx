@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
-import { Coffee, LayoutGrid, LogOut, Moon, Settings, Wallet } from 'lucide-react';
+import { Coffee, LayoutGrid, LogOut, Moon, Receipt, Settings, Wallet } from 'lucide-react';
 import { NavLink, Outlet } from 'react-router';
 import { Logo } from '../../components/brand/Brand';
 import { Button } from '../../components/ui/button';
@@ -11,6 +11,7 @@ import { connectBoard } from '../../lib/socket';
 import { toggleTheme } from '../../lib/theme';
 import { toast } from '../../stores/toast';
 import { useLogout, useMe } from '../auth/auth';
+import { PrinterSimulatorPanel } from '../printing/PrinterSimulatorPanel';
 import { OpenShiftDialog } from '../shift/OpenShiftDialog';
 import { ShiftChip } from '../shift/ShiftChip';
 
@@ -37,6 +38,7 @@ export function AppShell() {
   );
   const items = [
     { to: '/', label: 'Meja', icon: LayoutGrid, show: true },
+    { to: '/transactions', label: 'Transaksi', icon: Receipt, show: true },
     { to: '/shift', label: 'Shift', icon: Wallet, show: true },
     { to: '/products', label: 'Produk', icon: Coffee, show: me.role !== 'KASIR' },
     { to: '/settings', label: 'Pengaturan', icon: Settings, show: me.role === 'OWNER' },
@@ -80,6 +82,7 @@ export function AppShell() {
           <Outlet />
         </main>
       </div>
+      <PrinterSimulatorPanel />
       <OpenShiftDialog />
     </div>
   );

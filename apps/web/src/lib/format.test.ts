@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatDuration, formatMinutes, formatRupiah, parseRupiah } from './format';
+import { formatDuration, formatMinutes, formatRupiah, localDateInput, localDayRange, parseRupiah } from './format';
 
 describe('format', () => {
   it('formatRupiah memakai titik ribuan', () => {
@@ -22,5 +22,9 @@ describe('format', () => {
     expect(formatMinutes(45)).toBe('45 menit');
     expect(formatMinutes(60)).toBe('1 jam');
     expect(formatMinutes(90)).toBe('1 jam 30 menit');
+  });
+  it('localDayRange: hari lokal outlet → rentang UTC', () => {
+    expect(localDayRange('2026-10-01', 420)).toEqual({ from: '2026-09-30T17:00:00.000Z', to: '2026-10-01T17:00:00.000Z' });
+    expect(localDateInput(new Date('2026-09-30T18:30:00Z'), 420)).toBe('2026-10-01');
   });
 });

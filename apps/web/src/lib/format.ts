@@ -24,3 +24,18 @@ export function parseRupiah(s: string): number {
   const digits = s.replace(/\D/g, '');
   return digits ? Number(digits) : 0;
 }
+
+const pad2 = (n: number) => String(n).padStart(2, '0');
+
+/** "YYYY-MM-DD" (hari lokal outlet) → rentang UTC [from, to). */
+export function localDayRange(date: string, utcOffsetMin: number): { from: string; to: string } {
+  const [y, m, d] = date.split('-').map(Number) as [number, number, number];
+  const from = Date.UTC(y, m - 1, d) - utcOffsetMin * 60_000;
+  return { from: new Date(from).toISOString(), to: new Date(from + 86_400_000).toISOString() };
+}
+
+/** Tanggal lokal outlet untuk <input type="date">. */
+export function localDateInput(now: Date, utcOffsetMin: number): string {
+  const l = new Date(now.getTime() + utcOffsetMin * 60_000);
+  return `${l.getUTCFullYear()}-${pad2(l.getUTCMonth() + 1)}-${pad2(l.getUTCDate())}`;
+}
