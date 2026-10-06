@@ -41,15 +41,21 @@ export interface ReceiptModel {
   printedAt: string;
   cashier: string;
   label: string;
+  /** Judul di bawah header, mis. "TANDA TERIMA DP" untuk bill DEPOSIT. */
+  title?: string | null;
+  member?: { name: string; levelName: string } | null;
   sessions: { unitName: string; start: string; end: string }[];
-  lines: { name: string; qty: number; unitPrice: number; amount: number; discount: number; details: string[] }[];
+  lines: { name: string; qty: number; unitPrice: number; amount: number; discount: number; memberDiscount?: number; details: string[] }[];
   subtotal: number;
   discountTotal: number;
   serviceTotal: number;
   taxTotal: number;
   grandTotal: number;
   payments: { label: string; amount: number }[];
+  /** Kembalian dari pembayaran tunai. */
   change: number;
+  /** Kelebihan DP booking yang dikembalikan tunai. */
+  depositChange?: number;
   copy: 'REPRINT' | 'VOID' | null;
 }
 
@@ -58,10 +64,12 @@ export function renderReceipt(m: ReceiptModel): PrintLine[] {
   if (m.address.trim()) out.push(center(m.address.trim()));
   for (const h of multiline(m.header)) out.push(center(h));
   out.push(rule());
+  if (m.title) out.push(center(m.title, { bold: true }));
   if (m.copy === 'REPRINT') out.push(center('** CETAK ULANG **', { bold: true }));
   if (m.copy === 'VOID') out.push(center('** VOID **', { bold: true }));
   out.push({ text: cut(`No. ${m.billNumber}`) }, { text: cut(`Tanggal ${m.printedAt}`) }, { text: cut(`Kasir ${m.cashier}`) });
   if (m.label) out.push({ text: cut(m.label) });
+  if (m.member) out.push({ text: cut(`Member: ${m.member.name} (${m.member.levelName})`) });
   for (const s of m.sessions) out.push({ text: cut(`${s.unitName} ${s.start}-${s.end}`) });
   out.push(rule());
 
@@ -70,6 +78,7 @@ export function renderReceipt(m: ReceiptModel): PrintLine[] {
     else out.push({ text: cut(l.name) }, { text: twoCols(`  ${l.qty} x ${formatAmount(l.unitPrice)}`, formatAmount(l.amount)) });
     for (const d of l.details) out.push({ text: cut(`  ${d}`) });
     if (l.discount > 0) out.push({ text: twoCols('  Diskon', `-${formatAmount(l.discount)}`) });
+    if ((l.memberDiscount ?? 0) > 0) out.push({ text: twoCols('  Diskon member', `-${formatAmount(l.memberDiscount ?? 0)}`) });
   }
   out.push(rule());
   out.push({ text: twoCols('Subtotal', formatAmount(m.subtotal)) });
@@ -80,6 +89,7 @@ export function renderReceipt(m: ReceiptModel): PrintLine[] {
   out.push(rule());
   for (const p of m.payments) out.push({ text: twoCols(p.label, formatAmount(p.amount)) });
   if (m.change > 0) out.push({ text: twoCols('Kembalian', formatAmount(m.change)) });
+  if ((m.depositChange ?? 0) > 0) out.push({ text: twoCols('Kembali DP', formatAmount(m.depositChange ?? 0)) });
   const footer = multiline(m.footer);
   if (footer.length) {
     out.push(rule());
@@ -102,6 +112,8 @@ export interface ShiftReportModel {
   expectedCash: number;
   countedCash: number;
   note: string | null;
+  /** Kembalian DP booking (tunai keluar) di shift ini. */
+  depositChange?: number;
 }
 
 export function renderShiftReport(m: ShiftReportModel): PrintLine[] {
@@ -114,6 +126,7 @@ export function renderShiftReport(m: ShiftReportModel): PrintLine[] {
     { text: 'Penjualan', bold: true },
   );
   for (const s of m.sales) out.push({ text: twoCols(`  ${s.label}`, formatAmount(s.amount)) });
+  if ((m.depositChange ?? 0) > 0) out.push({ text: twoCols('  Kembali DP', `-${formatAmount(m.depositChange ?? 0)}`) });
   if (m.voids.length) {
     out.push({ text: 'Void', bold: true });
     for (const v of m.voids) out.push({ text: twoCols(`  ${v.label}`, `-${formatAmount(v.amount)}`) });

@@ -92,3 +92,42 @@ describe('renderShiftReport', () => {
     expect(text).toContain('kurang receh');
   });
 });
+
+describe('renderReceipt — M3', () => {
+  it('judul TANDA TERIMA DP untuk bill DEPOSIT', () => {
+    expect(renderReceipt({ ...model, title: 'TANDA TERIMA DP' })).toContainEqual({ text: 'TANDA TERIMA DP', align: 'center', bold: true });
+  });
+
+  it('member, diskon member per baris, DP booking, dan Kembali DP', () => {
+    const lines = renderReceipt({
+      ...model,
+      member: { name: 'Sinta', levelName: 'Gold' },
+      lines: [{ name: 'Meja 2 - Open billing', qty: 1, unitPrice: 40000, amount: 40000, discount: 0, memberDiscount: 4000, details: [] }],
+      subtotal: 40000,
+      discountTotal: 4000,
+      grandTotal: 36000,
+      payments: [{ label: 'DP booking', amount: 50000 }],
+      change: 0,
+      depositChange: 14000,
+    });
+    const text = toPlainText(lines);
+    for (const l of lines) expect(l.text.length).toBeLessThanOrEqual(RECEIPT_WIDTH);
+    expect(text).toContain('Member: Sinta (Gold)');
+    expect(text).toContain(twoCols('  Diskon member', '-4.000'));
+    expect(text).toContain(twoCols('DP booking', '50.000'));
+    expect(text).toContain(twoCols('Kembali DP', '14.000'));
+    expect(text).not.toContain('Kembalian');
+  });
+
+  it('rekap shift menampilkan Kembali DP di bawah penjualan', () => {
+    const text = toPlainText(
+      renderShiftReport({
+        outletName: 'FunPlay', openedAt: '01/10/2026 08:00', closedAt: '01/10/2026 16:00', openedBy: 'Andi', closedBy: 'Andi',
+        openingCash: 100000, sales: [{ label: 'Tunai', amount: 50000 }, { label: 'DP booking (non-kas)', amount: 40000 }],
+        voids: [], billCount: 2, voidCount: 0, expectedCash: 140000, countedCash: 140000, note: null, depositChange: 10000,
+      }),
+    );
+    expect(text).toContain(twoCols('  DP booking (non-kas)', '40.000'));
+    expect(text).toContain(twoCols('  Kembali DP', '-10.000'));
+  });
+});
