@@ -42,11 +42,11 @@ export function BillItems({ billId }: { billId: string }) {
       {items.map((l) => (
         <div key={l.id} className="flex items-center gap-2">
           <span className="min-w-0 flex-1 truncate">{l.name}</span>
-          <button type="button" aria-label={`Kurangi ${l.name}`} disabled={l.qty <= 1 || action.isPending} onClick={() => decrease(l.id, l.name, l.qty)} className="disabled:opacity-30"><Minus size={14} /></button>
+          <button type="button" aria-label={`Kurangi ${l.name}`} disabled={!hasShift || l.qty <= 1 || action.isPending} onClick={() => decrease(l.id, l.name, l.qty)} className="disabled:opacity-30"><Minus size={14} /></button>
           <span className="w-6 text-center tabular-nums">{l.qty}</span>
-          <button type="button" aria-label={`Tambah ${l.name}`} disabled={action.isPending} onClick={() => action.mutate({ method: 'PATCH', path: path(l.id), body: { qty: l.qty + 1 } })}><Plus size={14} /></button>
+          <button type="button" aria-label={`Tambah ${l.name}`} disabled={!hasShift || action.isPending} onClick={() => action.mutate({ method: 'PATCH', path: path(l.id), body: { qty: l.qty + 1 } })}><Plus size={14} /></button>
           <span className="w-20 text-right tabular-nums">{formatRupiah(l.unitPrice * l.qty)}</span>
-          <button type="button" aria-label={`Hapus ${l.name}`} disabled={action.isPending} onClick={() => remove(l.id, l.name)} className="text-rose-600"><Trash2 size={14} /></button>
+          <button type="button" aria-label={`Hapus ${l.name}`} disabled={!hasShift || action.isPending} onClick={() => remove(l.id, l.name)} className="text-rose-600"><Trash2 size={14} /></button>
         </div>
       ))}
       <div className="flex justify-between border-t border-line pt-2 font-extrabold text-primary">

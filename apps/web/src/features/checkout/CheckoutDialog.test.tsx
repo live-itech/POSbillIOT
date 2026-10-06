@@ -16,10 +16,11 @@ const bill: BillView = {
   activeSessions: [], payments: [], stored: null, paidAt: null, paidByName: null, shiftId: null, mergedIntoId: null, cancelReason: null, voidReason: null, voidedAt: null,
 };
 
-function setup(b: BillView = bill) {
+function setup(b: BillView = bill, shift = true) {
   const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
     const json = (x: unknown) => new Response(JSON.stringify(x), { status: 200, headers: { 'content-type': 'application/json' } });
     if (url === '/api/auth/me') return json({ user: { id: 'k', name: 'Kasir', username: 'kasir', role: 'KASIR' } });
+    if (url === '/api/shifts/current') return json({ summary: shift ? { id: 'sh1' } : null });
     if (url === '/api/bills/b1') return json(b);
     if (url === '/api/bills/b1/checkout' && init?.method === 'POST') return json({ bill: { ...b, status: 'PAID' }, change: 44000 });
     return new Response('{}', { status: 404 });
@@ -78,5 +79,11 @@ it('split QRIS + uang pas tunai; Bayar aktif hanya saat sisa 0', async () => {
 it('sesi masih berjalan → Bayar nonaktif dengan pesan', async () => {
   setup({ ...bill, activeSessions: [{ id: 's9', billId: 'b1', unitName: 'Meja 2', mode: 'OPEN', status: 'RUNNING', startedAt: '2026-10-01T03:00:00.000Z', plannedEndAt: null, endedAt: null, packageName: null, packageDurationMin: null, packagePrice: null, segments: [], pauses: [] }] });
   expect(await screen.findByText('Hentikan sesi meja terlebih dahulu')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Bayar' })).toBeDisabled();
+});
+
+it('tanpa shift: Bayar nonaktif dengan alasan', async () => {
+  setup(bill, false);
+  expect(await screen.findByText('Buka shift dulu untuk menerima pembayaran')).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Bayar' })).toBeDisabled();
 });

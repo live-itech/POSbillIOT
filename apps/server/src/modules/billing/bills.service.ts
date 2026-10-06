@@ -143,17 +143,18 @@ export class BillService {
     const pre = await prisma.bill.findUnique({ where: { id: billId }, include: { lines: true, sessions: { where: { status: { not: 'ENDED' } } } } });
     if (!pre) throw notFound('Bill');
     if (pre.sessions.length) throw conflict('SESSION_ACTIVE', 'Hentikan sesi meja terlebih dahulu');
-    const total = linesTotals(pre, settings).grandTotal;
-    const approvedById = total > 0 ? await approveWithPin(prisma, clock, user, input.approvalPin) : null;
+    // keputusan PIN memakai subtotal sebelum diskon (diskon 100% tidak boleh menghindari PIN)
+    const approvedById = linesTotals(pre, settings).subtotal > 0 ? await approveWithPin(prisma, clock, user, input.approvalPin) : null;
     await prisma.$transaction(async (tx) => {
       const locked = await requireOpenBill(tx, billId);
       const running = await tx.session.count({ where: { billId, status: { not: 'ENDED' } } });
       if (running) throw conflict('SESSION_ACTIVE', 'Hentikan sesi meja terlebih dahulu');
-      if (linesTotals(locked, settings).grandTotal > 0 && !approvedById && user.role === 'KASIR') {
+      const lockedTotals = linesTotals(locked, settings);
+      if (lockedTotals.subtotal > 0 && !approvedById && user.role === 'KASIR') {
         throw new AppError(403, 'APPROVAL_REQUIRED', 'Aksi ini butuh PIN supervisor');
       }
       await tx.bill.update({ where: { id: billId }, data: { status: 'CANCELLED', cancelReason: input.reason } });
-      await audit(tx, { userId: user.id, action: 'bill.cancel', entity: 'Bill', entityId: billId, data: { reason: input.reason, total }, approvedById });
+      await audit(tx, { userId: user.id, action: 'bill.cancel', entity: 'Bill', entityId: billId, data: { reason: input.reason, subtotal: lockedTotals.subtotal, grandTotal: lockedTotals.grandTotal }, approvedById });
     });
     this.changed(billId);
     return loadBillView(prisma, billId);

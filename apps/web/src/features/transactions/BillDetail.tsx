@@ -59,7 +59,7 @@ export function BillDetail({ billId }: { billId: string }) {
       if (pin === null) return;
       action.mutate({ method: 'POST', path: `/bills/${billId}/void`, body: { reason, ...(pin ? { approvalPin: pin } : {}) } });
     } else if (kind === 'cancel') {
-      const needsPin = (preview?.totals.grandTotal ?? 0) > 0;
+      const needsPin = preview ? preview.totals.subtotal > 0 : b.lines.length > 0;
       const pin = needsPin ? await approvalPin(me.role, 'PIN supervisor untuk membatalkan bill') : undefined;
       if (pin === null) return;
       action.mutate({ method: 'POST', path: `/bills/${billId}/cancel`, body: { reason, ...(pin ? { approvalPin: pin } : {}) } });

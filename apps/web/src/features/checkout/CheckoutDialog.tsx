@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import { Button } from '../../components/ui/button';
 import { Modal } from '../../components/ui/modal';
 import { useNow } from '../../hooks/useNow';
+import { useHasShift } from '../../hooks/useShift';
 import { billKey, useBill, useBillAction, useBillPreview } from '../../hooks/useBill';
 import { api, ApiError } from '../../lib/api';
 import { formatMinutes, formatRupiah } from '../../lib/format';
@@ -31,15 +32,17 @@ export function CheckoutHost() {
   return billId ? <CheckoutDialog key={billId} billId={billId} onClose={close} /> : null;
 }
 
-function blockedReason(b: BillView): string | null {
+function blockedReason(b: BillView, hasShift: boolean): string | null {
   if (b.status !== 'OPEN') return 'Bill sudah tidak bisa dibayar';
   if (b.activeSessions.length) return 'Hentikan sesi meja terlebih dahulu';
   if (!b.lines.length) return 'Bill masih kosong';
+  if (!hasShift) return 'Buka shift dulu untuk menerima pembayaran';
   return null;
 }
 
 export function CheckoutDialog({ billId, onClose }: { billId: string; onClose: () => void }) {
   const me = useMe().data;
+  const hasShift = useHasShift();
   const qc = useQueryClient();
   const bill = useBill(billId);
   const settings = useBoard((s) => s.settings);
@@ -81,7 +84,7 @@ export function CheckoutDialog({ billId, onClose }: { billId: string; onClose: (
   const paid = payments.reduce((a, p) => a + p.amount, 0);
   const remaining = t.grandTotal - paid;
   const change = payments.reduce((a, p) => a + ((p.received ?? p.amount) - p.amount), 0);
-  const blocked = blockedReason(b);
+  const blocked = blockedReason(b, hasShift);
 
   const saveDiscount = (d: BillView['billDiscount']) => {
     const target = editing;

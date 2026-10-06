@@ -162,6 +162,17 @@ describe('konkurensi & shift (perbaikan review)', () => {
     expect(res.json().error.code).toBe('NO_OPEN_SHIFT');
   });
 
+  it('diskon 100% tidak menghindari PIN batal', async () => {
+    const bill = (await req('POST', '/api/bills')).json();
+    await req('POST', `/api/bills/${bill.id}/items`, { items: [{ productId: teh.id, qty: 1 }] });
+    expect((await req('PUT', `/api/bills/${bill.id}/discount`, { discount: { type: 'PERCENT', value: 100 } })).statusCode).toBe(200);
+    const res = await req('POST', `/api/bills/${bill.id}/cancel`, { reason: 'tes' });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error.code).toBe('APPROVAL_REQUIRED');
+    const ok = await req('POST', `/api/bills/${bill.id}/cancel`, { reason: 'tes', approvalPin: '1111' });
+    expect(ok.json().status).toBe('CANCELLED');
+  });
+
   it('batal bill bertagihan tanpa PIN ditolak, bill tetap OPEN', async () => {
     const bill = (await req('POST', '/api/bills')).json();
     await req('POST', `/api/bills/${bill.id}/items`, { items: [{ productId: teh.id, qty: 1 }] });
