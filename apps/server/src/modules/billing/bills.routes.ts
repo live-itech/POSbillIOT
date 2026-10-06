@@ -45,6 +45,11 @@ export function billsRoutes(ctx: AppContext): FastifyPluginAsync {
     app.put('/bills/:id/discount', auth, async (req) =>
       ctx.bills.setBillDiscount(req.user!, idParam.parse(req.params).id, z.object({ discount: discountSchema.nullable() }).parse(req.body).discount),
     );
+
+    app.put('/bills/:id/member', auth, async (req) =>
+      ctx.bills.setMember(req.user!, idParam.parse(req.params).id, z.object({ memberId: z.string().min(1).nullable() }).parse(req.body).memberId),
+    );
+
     app.post('/bills/:id/cancel', auth, async (req) => ctx.bills.cancel(req.user!, idParam.parse(req.params).id, cancelSchema.parse(req.body)));
     app.post('/bills/:id/merge', auth, async (req) =>
       ctx.bills.merge(req.user!, idParam.parse(req.params).id, z.object({ sourceBillId: z.string().min(1) }).parse(req.body).sourceBillId),

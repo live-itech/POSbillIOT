@@ -5,6 +5,8 @@ import type { Db } from '../../db';
 import { AppError, badRequest, conflict, notFound } from '../../lib/errors';
 import { audit } from '../audit/audit';
 import { approveWithPin } from '../auth/auth.service';
+import { lockBooking } from '../bookings/booking-lock';
+import { memberSnapshot, requireActiveMember } from '../members/members.service';
 import { nextBillNumber } from '../sessions/sessions.service';
 import { getSettings } from '../settings/settings.service';
 import { requireOpenShift } from '../shifts/shifts.service';
@@ -17,6 +19,13 @@ async function requireOpenBill(tx: Db, billId: string) {
   await lockBill(tx, billId);
   const bill = await tx.bill.findUniqueOrThrow({ where: { id: billId }, include: { lines: true } });
   if (bill.status !== 'OPEN') throw conflict('BILL_NOT_OPEN', 'Bill sudah tidak bisa diubah');
+  return bill;
+}
+
+/** Bill OPEN yang isinya boleh diubah: bill DP booking (kind DEPOSIT) hanya satu baris dan dikunci. */
+async function requireOpenSaleBill(tx: Db, billId: string) {
+  const bill = await requireOpenBill(tx, billId);
+  if (bill.kind === 'DEPOSIT') throw conflict('DEPOSIT_BILL_LOCKED', 'Bill DP booking tidak bisa diubah');
   return bill;
 }
 
@@ -50,7 +59,7 @@ export class BillService {
     const { prisma } = this.ctx;
     await prisma.$transaction(async (tx) => {
       await requireOpenShift(tx);
-      const bill = await requireOpenBill(tx, billId);
+      const bill = await requireOpenSaleBill(tx, billId);
       const lines = [...bill.lines];
       for (const item of items) {
         if ('custom' in item) {
@@ -92,7 +101,7 @@ export class BillService {
 
     await prisma.$transaction(async (tx) => {
       await requireOpenShift(tx);
-      const bill = await requireOpenBill(tx, billId);
+      const bill = await requireOpenSaleBill(tx, billId);
       const line = findLine(bill.lines, lineId);
       if (input.qty !== undefined && input.qty < line.qty && !approvedById) throw conflict('TOTAL_CHANGED', 'Item berubah, muat ulang bill');
       await tx.billLine.update({
@@ -116,7 +125,7 @@ export class BillService {
     const approvedById = await approveWithPin(prisma, clock, user, approvalPin);
     await prisma.$transaction(async (tx) => {
       await requireOpenShift(tx);
-      const bill = await requireOpenBill(tx, billId);
+      const bill = await requireOpenSaleBill(tx, billId);
       const line = findLine(bill.lines, lineId);
       await tx.billLine.delete({ where: { id: line.id } });
       await audit(tx, { userId: user.id, action: 'bill.remove_item', entity: 'Bill', entityId: billId, data: { name: line.nameSnapshot, qty: line.qty, unitPrice: line.unitPrice }, approvedById });
@@ -129,9 +138,27 @@ export class BillService {
     const { prisma } = this.ctx;
     await prisma.$transaction(async (tx) => {
       await requireOpenShift(tx);
-      await requireOpenBill(tx, billId);
+      await requireOpenSaleBill(tx, billId);
       await tx.bill.update({ where: { id: billId }, data: { billDiscountType: discount?.type ?? null, billDiscountValue: discount?.value ?? 0 } });
       await audit(tx, { userId: user.id, action: 'bill.discount', entity: 'Bill', entityId: billId, data: { discount: discount ? { ...discount } : null } });
+    });
+    this.changed(billId);
+    return loadBillView(prisma, billId);
+  }
+
+  /** Pasang (memberId) atau lepas (null) member. Persen diskon level di-snapshot ulang setiap kali dipasang. */
+  async setMember(user: PublicUser, billId: string, memberId: string | null): Promise<BillView> {
+    const { prisma } = this.ctx;
+    await prisma.$transaction(async (tx) => {
+      await requireOpenShift(tx);
+      await requireOpenSaleBill(tx, billId);
+      const m = memberId ? await requireActiveMember(tx, memberId) : null;
+      const snap = memberSnapshot(m);
+      await tx.bill.update({ where: { id: billId }, data: snap });
+      await audit(tx, {
+        userId: user.id, action: 'bill.member', entity: 'Bill', entityId: billId,
+        data: { memberId: snap.memberId, timePct: snap.memberTimeDiscountPct, fnbPct: snap.memberFnbDiscountPct },
+      });
     });
     this.changed(billId);
     return loadBillView(prisma, billId);
@@ -142,11 +169,12 @@ export class BillService {
     const settings = await getSettings(prisma);
     const pre = await prisma.bill.findUnique({ where: { id: billId }, include: { lines: true, sessions: { where: { status: { not: 'ENDED' } } } } });
     if (!pre) throw notFound('Bill');
+    if (pre.kind === 'DEPOSIT') throw conflict('DEPOSIT_BILL_LOCKED', 'Bill DP booking dibatalkan lewat menu Booking');
     if (pre.sessions.length) throw conflict('SESSION_ACTIVE', 'Hentikan sesi meja terlebih dahulu');
     // keputusan PIN memakai subtotal sebelum diskon (diskon 100% tidak boleh menghindari PIN)
     const approvedById = linesTotals(pre, settings).subtotal > 0 ? await approveWithPin(prisma, clock, user, input.approvalPin) : null;
     await prisma.$transaction(async (tx) => {
-      const locked = await requireOpenBill(tx, billId);
+      const locked = await requireOpenSaleBill(tx, billId);
       const running = await tx.session.count({ where: { billId, status: { not: 'ENDED' } } });
       if (running) throw conflict('SESSION_ACTIVE', 'Hentikan sesi meja terlebih dahulu');
       const lockedTotals = linesTotals(locked, settings);
@@ -163,9 +191,9 @@ export class BillService {
   async merge(user: PublicUser, targetId: string, sourceId: string): Promise<BillView> {
     const { prisma } = this.ctx;
     if (targetId === sourceId) throw badRequest('SAME_BILL', 'Pilih bill lain untuk digabung');
-    const movedUnits = await prisma.$transaction(async (tx) => {
+    const moved = await prisma.$transaction(async (tx) => {
       await requireOpenShift(tx);
-      // urutan kunci global: sesi → bill (sama dengan stop)
+      // urutan kunci global: sesi → bill → booking (sama dengan stop/checkout)
       await tx.$queryRaw`SELECT id FROM "Session" WHERE "billId" IN (${targetId}, ${sourceId}) AND status <> 'ENDED' ORDER BY id FOR UPDATE`;
       for (const id of [targetId, sourceId].sort()) await lockBill(tx, id); // urutan tetap → tidak deadlock
       const [target, source] = await Promise.all([
@@ -173,14 +201,45 @@ export class BillService {
         tx.bill.findUniqueOrThrow({ where: { id: sourceId }, include: { sessions: { where: { status: { not: 'ENDED' } } } } }),
       ]);
       if (target.status !== 'OPEN' || source.status !== 'OPEN') throw conflict('BILL_NOT_OPEN', 'Hanya bill yang belum dibayar yang bisa digabung');
+      if (target.kind === 'DEPOSIT' || source.kind === 'DEPOSIT') throw conflict('DEPOSIT_BILL_LOCKED', 'Bill DP booking tidak bisa digabung');
+      if (target.bookingId && source.bookingId) throw conflict('MERGE_CONFLICT', 'Kedua bill terhubung ke booking yang berbeda');
+      if (target.memberId && source.memberId && target.memberId !== source.memberId) {
+        throw conflict('MERGE_CONFLICT', 'Kedua bill memakai member yang berbeda');
+      }
+      if (source.bookingId) {
+        await lockBooking(tx, source.bookingId);
+        await tx.booking.update({ where: { id: source.bookingId }, data: { saleBillId: targetId } });
+      }
       await tx.billLine.updateMany({ where: { billId: sourceId }, data: { billId: targetId } });
       await tx.session.updateMany({ where: { billId: sourceId }, data: { billId: targetId } });
-      await tx.bill.update({ where: { id: sourceId }, data: { status: 'CANCELLED', mergedIntoId: targetId, cancelReason: `Digabung ke ${target.number}` } });
-      await tx.bill.update({ where: { id: targetId }, data: { label: `${target.label} + ${source.label}` } });
-      await audit(tx, { userId: user.id, action: 'bill.merge', entity: 'Bill', entityId: targetId, data: { sourceBillId: sourceId } });
-      return source.sessions.map((s) => s.unitId);
+      await tx.bill.update({
+        where: { id: sourceId },
+        data: { status: 'CANCELLED', mergedIntoId: targetId, cancelReason: `Digabung ke ${target.number}`, bookingId: null },
+      });
+      await tx.bill.update({
+        where: { id: targetId },
+        data: {
+          label: `${target.label} + ${source.label}`,
+          ...(source.bookingId ? { bookingId: source.bookingId } : {}),
+          ...(!target.memberId && source.memberId
+            ? {
+                memberId: source.memberId,
+                memberName: source.memberName,
+                memberLevelName: source.memberLevelName,
+                memberTimeDiscountPct: source.memberTimeDiscountPct,
+                memberFnbDiscountPct: source.memberFnbDiscountPct,
+              }
+            : {}),
+        },
+      });
+      await audit(tx, {
+        userId: user.id, action: 'bill.merge', entity: 'Bill', entityId: targetId,
+        data: { sourceBillId: sourceId, bookingId: source.bookingId, memberId: source.memberId },
+      });
+      return { units: source.sessions.map((s) => s.unitId), bookingId: source.bookingId };
     });
-    for (const unitId of movedUnits) this.ctx.bus.emit('unit.changed', unitId); // SessionView.billId berubah
+    for (const unitId of moved.units) this.ctx.bus.emit('unit.changed', unitId); // SessionView.billId berubah
+    if (moved.bookingId) this.ctx.bus.emit('booking.changed', moved.bookingId);
     this.changed(targetId, sourceId);
     return loadBillView(prisma, targetId);
   }

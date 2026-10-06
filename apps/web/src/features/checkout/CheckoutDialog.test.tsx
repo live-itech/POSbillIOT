@@ -13,7 +13,7 @@ const bill: BillView = {
       breakdown: [{ kind: 'TARIFF', label: 'Reguler Siang', tariffId: 't', unitTypeId: 'reg', pricePerHour: 40000, minutes: 60, amount: 40000 }] },
     { id: 'l2', type: 'PRODUCT', productId: 'p1', sessionId: null, name: 'Es Teh', unitPrice: 8000, qty: 2, discount: null, breakdown: null },
   ],
-  activeSessions: [], payments: [], stored: null, paidAt: null, paidByName: null, shiftId: null, mergedIntoId: null, cancelReason: null, voidReason: null, voidedAt: null,
+  activeSessions: [], payments: [], stored: null, paidAt: null, paidByName: null, shiftId: null, mergedIntoId: null, cancelReason: null, voidReason: null, voidedAt: null, kind: 'SALE', member: null,
 };
 
 function setup(b: BillView = bill, shift = true) {

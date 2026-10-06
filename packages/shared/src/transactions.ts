@@ -1,5 +1,6 @@
 import type { ChargeLine } from './billing/charge';
 import type { SessionView } from './views';
+import type { BillMemberView } from './members';
 
 export const PAYMENT_METHODS = ['CASH', 'QRIS', 'CARD', 'TRANSFER', 'DEPOSIT'] as const;
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
@@ -70,6 +71,9 @@ export interface BillView {
   number: string;
   label: string;
   status: BillStatus;
+  kind: BillKind;
+  /** Snapshot member saat dipasang (diskon level ikut di-snapshot). */
+  member: BillMemberView | null;
   createdAt: string;
   createdByName: string;
   billDiscount: Discount | null;
@@ -92,6 +96,7 @@ export interface BillSummary {
   number: string;
   label: string;
   status: BillStatus;
+  kind: BillKind;
   createdAt: string;
   paidAt: string | null;
   /** PAID/VOID: total tersimpan. OPEN: total baris tersimpan (tanpa sesi berjalan). */

@@ -1,7 +1,8 @@
 import type { Prisma, BillLine } from '@prisma/client';
 import {
   computeBillTotals, DISCOUNT_TYPES, lineScope,
-  type BillSummary, type BillTotals, type BillView, type ChargeLine, type Discount, type PublicSettings, type TotalsLineInput,
+  type BillKind, type BillSummary, type BillTotals, type BillView, type ChargeLine, type Discount, type MemberDiscount, type PublicSettings,
+  type TotalsLineInput,
 } from '@funplay/shared';
 import { z } from 'zod';
 import type { Db } from '../../db';
@@ -18,8 +19,19 @@ export const billInclude = {
   lines: { orderBy: { createdAt: 'asc' } },
   payments: { orderBy: { createdAt: 'asc' } },
   sessions: { where: { status: { not: 'ENDED' } }, include: { ...sessionParts, unit: { select: { name: true } } } },
+  member: { select: { code: true } },
 } satisfies Prisma.BillInclude;
 export type BillRow = Prisma.BillGetPayload<{ include: typeof billInclude }>;
+
+/** Kolom bill yang dibutuhkan kalkulator total (baris tersimpan + diskon bill + snapshot member). */
+export interface TotalsBill {
+  lines: BillLine[];
+  billDiscountType: Discount['type'] | null;
+  billDiscountValue: number;
+  memberId: string | null;
+  memberTimeDiscountPct: number;
+  memberFnbDiscountPct: number;
+}
 
 export const lineDiscount = (l: Pick<BillLine, 'discountType' | 'discountValue'>): Discount | null =>
   l.discountType ? { type: l.discountType, value: l.discountValue } : null;
@@ -27,16 +39,16 @@ export const lineDiscount = (l: Pick<BillLine, 'discountType' | 'discountValue'>
 export const billDiscountOf = (b: { billDiscountType: Discount['type'] | null; billDiscountValue: number }): Discount | null =>
   b.billDiscountType ? { type: b.billDiscountType, value: b.billDiscountValue } : null;
 
+/** Snapshot diskon level di bill; null bila bill tanpa member. */
+export const memberDiscountOf = (b: Pick<TotalsBill, 'memberId' | 'memberTimeDiscountPct' | 'memberFnbDiscountPct'>): MemberDiscount | null =>
+  b.memberId ? { timePct: b.memberTimeDiscountPct, fnbPct: b.memberFnbDiscountPct } : null;
+
 export const totalsInput = (lines: BillLine[]): TotalsLineInput[] =>
   lines.map((l) => ({ id: l.id, scope: lineScope(l.type), amount: l.unitPrice * l.qty, discount: lineDiscount(l) }));
 
-/** Total dari baris tersimpan (sesi yang masih berjalan tidak ikut). */
-export function linesTotals(
-  bill: { lines: BillLine[]; billDiscountType: Discount['type'] | null; billDiscountValue: number },
-  settings: PublicSettings,
-  discount: Discount | null = billDiscountOf(bill),
-): BillTotals {
-  return computeBillTotals(totalsInput(bill.lines), discount, settings);
+/** Total dari baris tersimpan (sesi yang masih berjalan tidak ikut), termasuk diskon member. */
+export function linesTotals(bill: TotalsBill, settings: PublicSettings, discount: Discount | null = billDiscountOf(bill)): BillTotals {
+  return computeBillTotals(totalsInput(bill.lines), discount, settings, memberDiscountOf(bill));
 }
 
 export async function lockBill(tx: Db, billId: string): Promise<void> {
@@ -53,6 +65,17 @@ export async function toBillView(db: Db, b: BillRow): Promise<BillView> {
     number: b.number,
     label: b.label,
     status: b.status,
+    kind: b.kind,
+    member: b.memberId
+      ? {
+          id: b.memberId,
+          code: b.member?.code ?? '',
+          name: b.memberName ?? '',
+          levelName: b.memberLevelName ?? '',
+          timeDiscountPct: b.memberTimeDiscountPct,
+          fnbDiscountPct: b.memberFnbDiscountPct,
+        }
+      : null,
     createdAt: b.createdAt.toISOString(),
     createdByName: names.get(b.createdById) ?? '-',
     billDiscount: billDiscountOf(b),
@@ -92,8 +115,10 @@ export async function loadBillView(db: Db, billId: string): Promise<BillView> {
 }
 
 export function toBillSummary(
-  b: { id: string; number: string; label: string; status: BillSummary['status']; createdAt: Date; paidAt: Date | null; grandTotal: number;
-       lines: BillLine[]; billDiscountType: Discount['type'] | null; billDiscountValue: number; sessions: { status: string }[] },
+  b: TotalsBill & {
+    id: string; number: string; label: string; status: BillSummary['status']; kind: BillKind; createdAt: Date; paidAt: Date | null; grandTotal: number;
+    sessions: { status: string }[];
+  },
   settings: PublicSettings,
 ): BillSummary {
   const stored = b.status === 'PAID' || b.status === 'VOID';
@@ -102,6 +127,7 @@ export function toBillSummary(
     number: b.number,
     label: b.label,
     status: b.status,
+    kind: b.kind,
     createdAt: b.createdAt.toISOString(),
     paidAt: iso(b.paidAt),
     total: stored ? b.grandTotal : linesTotals(b, settings).grandTotal,

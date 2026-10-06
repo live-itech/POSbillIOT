@@ -8,6 +8,7 @@ export interface BusEvents {
   'device.changed': [DeviceStatusView];
   'bill.changed': [billId: string];
   'shift.changed': [];
+  'booking.changed': [bookingId: string];
   'print.job': [PrintJobView];
 }
 

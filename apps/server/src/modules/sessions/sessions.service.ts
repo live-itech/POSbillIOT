@@ -9,6 +9,7 @@ import { badRequest, conflict, notFound } from '../../lib/errors';
 import { audit } from '../audit/audit';
 import { approveWithPin } from '../auth/auth.service';
 import { loadTariffRules } from '../catalog/tariffs.service';
+import { memberSnapshot, requireActiveMember } from '../members/members.service';
 import { requireOpenShift } from '../shifts/shifts.service';
 import { getSettings } from '../settings/settings.service';
 
@@ -59,7 +60,7 @@ export class SessionService {
     }
   }
 
-  async start(user: PublicUser, input: { unitId: string; mode: SessionMode; packageId?: string }): Promise<Session> {
+  async start(user: PublicUser, input: { unitId: string; mode: SessionMode; packageId?: string; memberId?: string | null }): Promise<Session> {
     const { prisma, clock } = this.ctx;
     const now = clock.now();
     const settings = await getSettings(prisma);
@@ -85,8 +86,9 @@ export class SessionService {
           findTariff(await loadTariffRules(tx), unit.unitTypeId, now, settings.utcOffsetMin); // gagal cepat bila tarif belum diatur
         }
 
+        const member = input.memberId ? await requireActiveMember(tx, input.memberId) : null;
         const bill = await tx.bill.create({
-          data: { number: await nextBillNumber(tx, now, settings.utcOffsetMin), label: unit.name, createdById: user.id },
+          data: { number: await nextBillNumber(tx, now, settings.utcOffsetMin), label: unit.name, createdById: user.id, ...memberSnapshot(member) },
         });
         const s = await tx.session.create({
           data: {
@@ -105,7 +107,7 @@ export class SessionService {
           },
         });
         if (unit.lightOverride !== null) await tx.unit.update({ where: { id: unit.id }, data: { lightOverride: null } });
-        await audit(tx, { userId: user.id, action: 'session.start', entity: 'Session', entityId: s.id, data: { unitId: unit.id, mode: input.mode, packageId: pkg?.id ?? null } });
+        await audit(tx, { userId: user.id, action: 'session.start', entity: 'Session', entityId: s.id, data: { unitId: unit.id, mode: input.mode, packageId: pkg?.id ?? null, memberId: member?.id ?? null } });
         return s;
       });
     } catch (err) {

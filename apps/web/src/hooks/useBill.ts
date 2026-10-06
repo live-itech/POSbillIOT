@@ -46,7 +46,8 @@ export function computeBillPreview(bill: BillView, settings: PublicSettings, tar
     ...bill.lines.map((l) => ({ id: l.id, scope: lineScope(l.type), amount: l.unitPrice * l.qty, discount: l.discount })),
     ...liveTime.map((t) => ({ id: `live-${t.sessionId}`, scope: 'BILLING' as const, amount: t.charge?.total ?? 0, discount: null })),
   ];
-  return { totals: computeBillTotals(lines, bill.billDiscount, settings), liveTime };
+  const member = bill.member ? { timePct: bill.member.timeDiscountPct, fnbPct: bill.member.fnbDiscountPct } : null;
+  return { totals: computeBillTotals(lines, bill.billDiscount, settings, member), liveTime };
 }
 
 export function useBillPreview(bill: BillView | undefined, now: Date): BillPreview | null {
