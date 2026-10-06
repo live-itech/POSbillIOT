@@ -9,6 +9,7 @@ import { useHasShift } from '../../hooks/useShift';
 import { api } from '../../lib/api';
 import { cn } from '../../lib/cn';
 import { formatRupiah, parseRupiah } from '../../lib/format';
+import { newId } from '../../lib/id';
 import { showError, toast } from '../../stores/toast';
 
 type CartItem = { key: string; name: string; price: number; qty: number } & ({ productId: string } | { custom: { name: string; price: number } });
@@ -55,7 +56,7 @@ export function OrderDialog({ billId, title, open, onClose }: { billId: string; 
   const addManual = () => {
     if (!manual || !manual.name.trim()) return;
     const price = parseRupiah(manual.price);
-    setCart((cs) => [...cs, { key: `m-${cs.length}-${manual.name}`, custom: { name: manual.name.trim(), price }, name: manual.name.trim(), price, qty: 1 }]);
+    setCart((cs) => [...cs, { key: `m-${newId()}`, custom: { name: manual.name.trim(), price }, name: manual.name.trim(), price, qty: 1 }]);
     setManual(null);
   };
   const total = cart.reduce((a, c) => a + c.price * c.qty, 0);
@@ -100,12 +101,12 @@ export function OrderDialog({ billId, title, open, onClose }: { billId: string; 
         <aside className="flex flex-col gap-2 rounded-xl bg-bg p-3">
           <h3 className="font-bold">Keranjang</h3>
           {cart.length === 0 && <p className="text-sm text-muted">Pilih produk di sebelah kiri.</p>}
-          {cart.map((c, i) => (
+          {cart.map((c) => (
             <div key={c.key} className="flex items-center justify-between gap-2 text-sm">
               <span className="min-w-0 flex-1 truncate">{c.name}</span>
-              <button type="button" aria-label={`Kurangi jumlah keranjang ${i + 1}`} onClick={() => bump(c.key, -1)}><Minus size={14} /></button>
+              <button type="button" aria-label={`Kurangi ${c.name} di keranjang`} onClick={() => bump(c.key, -1)}><Minus size={14} /></button>
               <span className="w-6 text-center tabular-nums">{c.qty}</span>
-              <button type="button" aria-label={`Tambah jumlah keranjang ${i + 1}`} onClick={() => bump(c.key, 1)}><Plus size={14} /></button>
+              <button type="button" aria-label={`Tambah ${c.name} di keranjang`} onClick={() => bump(c.key, 1)}><Plus size={14} /></button>
             </div>
           ))}
           <div className="mt-auto flex justify-between border-t border-line pt-2 font-bold">
