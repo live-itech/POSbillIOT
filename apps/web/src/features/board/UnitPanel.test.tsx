@@ -19,6 +19,7 @@ function mockFetch() {
     if (url === '/api/auth/me') return json({ user: { id: 'k', name: 'Kasir', username: 'kasir', role: 'KASIR' } });
     if (url === '/api/packages') return json([{ id: 'p1', name: 'Paket 2 Jam', unitTypeId: 'reg', durationMin: 120, price: 90000, active: true }]);
     if (url === '/api/sessions' && init?.method === 'POST') return json({ unit: { ...idle } });
+    if (url === '/api/shifts/current') return json({ summary: { shift: { id: 's1', openedAt: '2026-10-01T01:00:00.000Z', openedByName: 'Kasir' } } });
     return new Response('{}', { status: 404 });
   });
 }

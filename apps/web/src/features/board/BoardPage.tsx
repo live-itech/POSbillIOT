@@ -6,6 +6,8 @@ import { Illustration, UnitTypeIcon } from '../../components/brand/Brand';
 import { useNow } from '../../hooks/useNow';
 import { cn } from '../../lib/cn';
 import { useBoard } from '../../stores/board';
+import { NewBillButton } from '../orders/NewBillButton';
+import { UnpaidStrip } from '../orders/UnpaidStrip';
 import { SimulatorPanel } from './SimulatorPanel';
 import { UnitCard } from './UnitCard';
 import { UnitPanel } from './UnitPanel';
@@ -32,7 +34,7 @@ export function BoardPage() {
       <NoShiftBanner />
       <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[1fr_380px]">
         <section className="flex min-h-0 flex-col gap-3">
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {['ALL', ...types].map((t) => (
               <button
                 key={t}
@@ -49,7 +51,9 @@ export function BoardPage() {
                 )}
               </button>
             ))}
+            <span className="ml-auto"><NewBillButton /></span>
           </div>
+          <UnpaidStrip />
           {order.length === 0 && (
             <div className="grid flex-1 place-items-center rounded-2xl bg-surface p-6 text-center">
               <div>

@@ -2,6 +2,7 @@ import type { PackageDto, UnitView } from '@funplay/shared';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Button } from '../../components/ui/button';
+import { useHasShift } from '../../hooks/useShift';
 import { api } from '../../lib/api';
 import { cn } from '../../lib/cn';
 import { formatMinutes, formatRupiah } from '../../lib/format';
@@ -14,6 +15,7 @@ export function StartSession({ unit }: { unit: UnitView }) {
   const packages = useQuery({ queryKey: ['/packages'], queryFn: () => api<PackageDto[]>('GET', '/packages') });
   const list = (packages.data ?? []).filter((p) => p.active && p.unitTypeId === unit.unitTypeId);
   const action = useSessionAction();
+  const hasShift = useHasShift();
 
   const start = async () => {
     try {
@@ -57,7 +59,8 @@ export function StartSession({ unit }: { unit: UnitView }) {
           ))}
         </div>
       )}
-      <Button size="lg" onClick={start} disabled={action.isPending || (mode === 'PACKAGE' && !packageId)}>
+      {!hasShift && <p className="text-sm text-amber-700">Buka shift dulu untuk memulai.</p>}
+      <Button size="lg" onClick={start} disabled={!hasShift || action.isPending || (mode === 'PACKAGE' && !packageId)}>
         Mulai
       </Button>
     </div>
