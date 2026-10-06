@@ -10,6 +10,8 @@ import { BillService } from './modules/billing/bills.service';
 import { billsRoutes } from './modules/billing/bills.routes';
 import { CheckoutService } from './modules/billing/checkout.service';
 import { checkoutRoutes } from './modules/billing/checkout.routes';
+import { BookingService } from './modules/bookings/bookings.service';
+import { bookingsRoutes } from './modules/bookings/bookings.routes';
 import { registerErrorHandler } from './lib/errors';
 import { authRoutes } from './modules/auth/auth.routes';
 import { installAuth } from './modules/auth/guard';
@@ -61,6 +63,7 @@ export async function buildApp(deps: BuildAppDeps) {
   ctx.shifts = new ShiftService(ctx);
   ctx.bills = new BillService(ctx);
   ctx.checkout = new CheckoutService(ctx);
+  ctx.bookings = new BookingService(ctx);
   ctx.printing = new PrintService(ctx, deps.printerFactory ?? defaultPrinterFactory);
   ctx.scheduler = new Scheduler(ctx);
 
@@ -86,6 +89,7 @@ export async function buildApp(deps: BuildAppDeps) {
       await api.register(shiftsRoutes(ctx));
       await api.register(billsRoutes(ctx));
       await api.register(checkoutRoutes(ctx));
+      await api.register(bookingsRoutes(ctx));
       await api.register(printingRoutes(ctx));
     },
     { prefix: '/api' },

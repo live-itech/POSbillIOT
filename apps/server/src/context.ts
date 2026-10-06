@@ -6,6 +6,7 @@ import type { DeviceManager } from './modules/devices/device-manager';
 import type { Scheduler } from './modules/scheduler/scheduler';
 import type { BillService } from './modules/billing/bills.service';
 import type { CheckoutService } from './modules/billing/checkout.service';
+import type { BookingService } from './modules/bookings/bookings.service';
 import type { PrintService } from './modules/printing/print.service';
 import type { SessionService } from './modules/sessions/sessions.service';
 import type { ShiftService } from './modules/shifts/shifts.service';
@@ -20,6 +21,7 @@ export interface AppContext {
   shifts: ShiftService;
   bills: BillService;
   checkout: CheckoutService;
+  bookings: BookingService;
   printing: PrintService;
   scheduler: Scheduler;
 }
