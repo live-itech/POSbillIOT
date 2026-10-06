@@ -8,7 +8,7 @@ import { formatRupiah } from '../../lib/format';
 export function MergeDialog({ targetId, onClose }: { targetId: string; onClose: () => void }) {
   const open = useQuery({ queryKey: ['bills', { status: 'OPEN' }], queryFn: () => api<BillSummary[]>('GET', '/bills?status=OPEN') });
   const action = useBillAction(targetId);
-  const others = (open.data ?? []).filter((b) => b.id !== targetId);
+  const others = (open.data ?? []).filter((b) => b.id !== targetId && b.kind !== 'DEPOSIT');
   const merge = async (sourceBillId: string) => {
     try {
       await action.mutateAsync({ method: 'POST', path: `/bills/${targetId}/merge`, body: { sourceBillId } });

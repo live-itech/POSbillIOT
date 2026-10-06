@@ -102,8 +102,17 @@ export function BillDetail({ billId }: { billId: string }) {
               <span className="tabular-nums">{formatRupiah(p.received ?? p.amount)}</span>
             </div>
           ))}
-          {b.payments.some((p) => (p.change ?? 0) > 0) && (
-            <div className="flex justify-between text-muted"><span>Kembalian</span><span className="tabular-nums">{formatRupiah(b.payments.reduce((a, p) => a + (p.change ?? 0), 0))}</span></div>
+          {b.payments.some((p) => p.method === 'CASH' && (p.change ?? 0) > 0) && (
+            <div className="flex justify-between text-muted">
+              <span>Kembalian</span>
+              <span className="tabular-nums">{formatRupiah(b.payments.filter((p) => p.method === 'CASH').reduce((a, p) => a + (p.change ?? 0), 0))}</span>
+            </div>
+          )}
+          {b.payments.some((p) => p.method === 'DEPOSIT' && (p.change ?? 0) > 0) && (
+            <div className="flex justify-between text-muted">
+              <span>Kembali DP</span>
+              <span className="tabular-nums">{formatRupiah(b.payments.filter((p) => p.method === 'DEPOSIT').reduce((a, p) => a + (p.change ?? 0), 0))}</span>
+            </div>
           )}
         </div>
       )}
