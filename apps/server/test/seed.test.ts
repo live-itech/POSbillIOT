@@ -36,6 +36,7 @@ it('seed menyediakan data yang dipakai E2E', async () => {
   expect(teh).toMatchObject({ price: 8000, kind: 'STOCK', category: { name: 'Minuman' } });
   expect((await prisma.product.findUniqueOrThrow({ where: { name: 'Kopi Susu' } })).price).toBe(15000);
   expect(await prisma.product.findUnique({ where: { name: 'Sewa Stick Premium' } })).toMatchObject({ kind: 'SERVICE' });
+  expect(await prisma.memberLevel.findUnique({ where: { name: 'Reguler' } })).toMatchObject({ timeDiscountPct: 0, fnbDiscountPct: 0, active: true });
 });
 
 it('seed gagal di tengah jalan di-rollback penuh', async () => {

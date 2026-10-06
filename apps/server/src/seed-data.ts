@@ -111,6 +111,7 @@ export async function seedDemo(prisma: PrismaClient, outletType: OutletType): Pr
       const cat = await tx.category.create({ data: { name: c.name, color: c.color, sortOrder: i } });
       await tx.product.createMany({ data: c.products.map((p) => ({ ...p, categoryId: cat.id })) });
     }
+    await tx.memberLevel.create({ data: { name: 'Reguler', timeDiscountPct: 0, fnbDiscountPct: 0, sortOrder: 0 } });
     return true;
   });
 }
