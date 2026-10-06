@@ -1,4 +1,4 @@
-import type { PrintJob, PrintKind } from '@prisma/client';
+import { Prisma, type PrintJob, type PrintKind } from '@prisma/client';
 import { encodeEscPos, formatReceiptDate, renderReceipt, renderShiftReport, renderTestPage, toPlainText, type PrintJobView, type PrintLine } from '@funplay/shared';
 import type { AppContext } from '../../context';
 import { getSettings } from '../settings/settings.service';
@@ -75,8 +75,9 @@ export class PrintService {
     try {
       const job = await prisma.printJob.update({ where: { id: jobId }, data: { status, error } });
       this.ctx.bus.emit('print.job', toView(job));
-    } catch {
-      // job bisa hilang bila DB direset (test); abaikan
+    } catch (e) {
+      // P2025: job hilang (DB direset di test); selebihnya dicatat.
+      if (!(e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025')) console.error('gagal memperbarui job cetak', e);
     }
   }
 }

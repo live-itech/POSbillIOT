@@ -105,3 +105,37 @@ describe('rekap shift & tes cetak', () => {
     expect(res.json().previewText).toContain('TES CETAK');
   });
 });
+
+describe('request kembar & USB', () => {
+  it('dua checkout paralel dengan key sama mencetak satu struk', async () => {
+    const bill = (await req('POST', '/api/bills')).json();
+    await req('POST', `/api/bills/${bill.id}/items`, { items: [{ productId: teh.id, qty: 1 }] });
+    const body = { idempotencyKey: 'dup-key-0001', expectedGrandTotal: 8000, payments: [{ method: 'CASH', amount: 8000, received: 10000 }] };
+    const rs = await Promise.all([req('POST', `/api/bills/${bill.id}/checkout`, body), req('POST', `/api/bills/${bill.id}/checkout`, body)]);
+    expect(rs.map((r) => r.statusCode)).toEqual([200, 200]);
+    await t.ctx.printing.idle();
+    expect(await prisma.printJob.count({ where: { kind: 'RECEIPT' } })).toBe(1);
+  });
+
+  it('USB: write yang macet membuat pengiriman berikutnya langsung ditolak', async () => {
+    const { mkfifoSync } = await import('node:fs').then(() => import('node:child_process')).then(async (cp) => ({ mkfifoSync: (p: string) => cp.execFileSync('mkfifo', [p]) }));
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const { rmSync, openSync, closeSync, constants } = await import('node:fs');
+    const { UsbPrinter } = await import('../src/modules/printing/printer');
+    const path = join(tmpdir(), `fp-usb-${process.pid}.fifo`);
+    mkfifoSync(path);
+    try {
+      const p = new UsbPrinter(path, 100);
+      await expect(p.send(new Uint8Array([1]))).rejects.toThrow(/Printer USB/);
+      await expect(p.send(new Uint8Array([1]))).rejects.toThrow(/sibuk/);
+      const fd = openSync(path, constants.O_RDONLY | constants.O_NONBLOCK); // buka sisi baca: write macet selesai
+      await vi.waitFor(async () => {
+        await expect(new UsbPrinter(path, 100).send(new Uint8Array([1]))).resolves.toBeUndefined();
+      });
+      closeSync(fd);
+    } finally {
+      rmSync(path, { force: true });
+    }
+  });
+});

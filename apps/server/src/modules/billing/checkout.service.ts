@@ -49,11 +49,15 @@ export class CheckoutService {
       : null;
 
     let result: { billId: string; change: number };
+    let replay = false;
     try {
       result = await prisma.$transaction(async (tx) => {
         await lockBill(tx, billId);
         const again = await this.prior(tx, billId, input.idempotencyKey); // request kembar yang baru selesai
-        if (again) return again;
+        if (again) {
+          replay = true;
+          return again;
+        }
         const bill = await tx.bill.findUniqueOrThrow({
           where: { id: billId },
           include: { lines: true, sessions: { where: { status: { not: 'ENDED' } }, select: { id: true } } },
@@ -103,9 +107,11 @@ export class CheckoutService {
       throw err;
     }
 
-    this.ctx.bus.emit('bill.changed', billId);
-    this.ctx.bus.emit('shift.changed');
-    this.ctx.printing.later(() => this.ctx.printing.printReceipt(user.id, billId));
+    if (!replay) {
+      this.ctx.bus.emit('bill.changed', billId);
+      this.ctx.bus.emit('shift.changed');
+      this.ctx.printing.later(() => this.ctx.printing.printReceipt(user.id, billId));
+    }
     return finish(result);
   }
 

@@ -37,13 +37,20 @@ export class LanPrinter implements Printer {
   }
 }
 
+/** Path USB yang write-nya masih menggantung (satu thread libuv macet per path, tidak lebih). */
+const usbBusy = new Set<string>();
+
 /** Printer USB di server lewat device file (mis. /dev/usb/lp0). */
 export class UsbPrinter implements Printer {
   constructor(private readonly path: string, private readonly timeoutMs = 5000) {}
 
   async send(bytes: Uint8Array): Promise<void> {
+    if (usbBusy.has(this.path)) throw new Error(`Printer USB sibuk / tidak merespons (${this.path})`);
+    usbBusy.add(this.path);
+    const write = writeFile(this.path, bytes);
+    void write.then(() => usbBusy.delete(this.path), () => usbBusy.delete(this.path));
     try {
-      await withTimeout(writeFile(this.path, bytes), this.timeoutMs);
+      await withTimeout(write, this.timeoutMs);
     } catch (e) {
       throw new Error(`Printer USB ${this.path} gagal: ${e instanceof Error ? e.message : String(e)}`);
     }
