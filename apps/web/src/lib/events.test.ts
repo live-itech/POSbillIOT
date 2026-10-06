@@ -16,4 +16,14 @@ describe('handleRealtime', () => {
     expect(spy).toHaveBeenCalledWith({ queryKey: ['printJobs'] });
     expect(useToasts.getState().toasts.at(-1)).toMatchObject({ level: 'danger', message: 'Cetak gagal: Printer LAN gagal' });
   });
+
+  it('booking → invalidate daftar booking; resync ikut memuat ulang booking', () => {
+    const qc = new QueryClient();
+    const spy = vi.spyOn(qc, 'invalidateQueries');
+    handleRealtime(qc, { type: 'booking', id: 'bk1' });
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['bookings'] });
+    spy.mockClear();
+    handleRealtime(qc, { type: 'resync' });
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['bookings'] });
+  });
 });

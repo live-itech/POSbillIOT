@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
+import { BookingSettings } from './BookingSettings';
 import { PrinterSettings } from './PrinterSettings';
 import { TransactionSettings } from './TransactionSettings';
 
@@ -46,4 +47,18 @@ it('printer LAN menampilkan host & port; tes cetak memanggil API', async () => {
   expect(screen.getByLabelText('Port')).toHaveValue('9100');
   await userEvent.click(screen.getByRole('button', { name: 'Tes cetak' }));
   await waitFor(() => expect(f.mock.calls.some(([u]) => u === '/api/print/test')).toBe(true));
+});
+
+it('menyimpan pengaturan booking', async () => {
+  const f = mockFetch();
+  vi.stubGlobal('fetch', f);
+  wrap(<BookingSettings />);
+  const hold = await screen.findByLabelText('Hold sebelum jadwal (menit)');
+  await userEvent.clear(hold);
+  await userEvent.type(hold, '30');
+  await userEvent.click(screen.getByRole('button', { name: 'Simpan' }));
+  await waitFor(() => {
+    const call = f.mock.calls.find(([u, i]) => u === '/api/settings' && i?.method === 'PUT');
+    expect(JSON.parse(String(call![1]!.body))).toEqual({ bookingHoldMin: 30, bookingNoShowMin: 15 });
+  });
 });

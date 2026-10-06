@@ -8,6 +8,7 @@ import { LoginPage } from './features/auth/LoginPage';
 import { AppShell } from './features/layout/AppShell';
 import { ProductsPage } from './features/products/ProductsPage';
 import { TransactionsPage } from './features/transactions/TransactionsPage';
+import { MembersPage } from './features/members/MembersPage';
 import { ShiftPage } from './features/shift/ShiftPage';
 import { SettingsPage } from './features/settings/SettingsPage';
 
@@ -25,6 +26,7 @@ export function App() {
         >
           <Route index element={<BoardPage />} />
           <Route path="transactions" element={<TransactionsPage />} />
+          <Route path="members" element={<MembersPage />} />
           <Route path="shift" element={<ShiftPage />} />
           <Route
             path="products"

@@ -16,8 +16,11 @@ export function handleRealtime(qc: QueryClient, e: RealtimeEvent): void {
       inv('printJobs');
       if (e.job.status === 'FAILED') toast.error(`Cetak gagal: ${e.job.error ?? 'printer tidak merespons'}`);
       break;
+    case 'booking':
+      inv('bookings');
+      break;
     case 'resync':
-      for (const k of ['bills', 'bill', 'shift', 'printJobs']) inv(k);
+      for (const k of ['bills', 'bill', 'shift', 'printJobs', 'bookings']) inv(k);
       break;
   }
 }

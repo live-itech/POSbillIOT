@@ -8,6 +8,7 @@ export type RealtimeEvent =
   | { type: 'bill'; id: string }
   | { type: 'shift' }
   | { type: 'printJob'; job: PrintJobView }
+  | { type: 'booking'; id: string }
   | { type: 'resync' };
 
 export function connectBoard(onAlert: (a: AlertEvent) => void, onUnauthorized: () => void, onEvent: (e: RealtimeEvent) => void = () => {}): () => void {
@@ -37,6 +38,7 @@ export function connectBoard(onAlert: (a: AlertEvent) => void, onUnauthorized: (
   socket.on('device', (d: DeviceStatusView) => store().applyDevice(d));
   socket.on('alert', onAlert);
   socket.on('bill', (p: { id: string }) => onEvent({ type: 'bill', id: p.id }));
+  socket.on('booking', (p: { id: string }) => onEvent({ type: 'booking', id: p.id }));
   socket.on('shift', () => onEvent({ type: 'shift' }));
   socket.on('printJob', (job: PrintJobView) => onEvent({ type: 'printJob', job }));
   return () => {
