@@ -7,7 +7,16 @@ import { audit } from '../audit/audit';
 
 export const currentShift = (db: Db) => db.shift.findFirst({ where: { openFlag: true } });
 
-export async function requireOpenShift(db: Db): Promise<Shift> {
+/**
+ * `lock: true` (hanya di dalam transaksi) mengambil FOR SHARE pada baris shift terbuka, sehingga
+ * ShiftService.close (FOR UPDATE) menunggu transaksi pembayaran/void yang sedang berjalan, dan
+ * pembayaran tidak bisa masuk ke shift yang sudah ditutup.
+ */
+export async function requireOpenShift(db: Db, opts: { lock?: boolean } = {}): Promise<Shift> {
+  if (opts.lock) {
+    const rows = await db.$queryRaw<{ id: string }[]>`SELECT id FROM "Shift" WHERE "openFlag" = true FOR SHARE`;
+    if (!rows.length) throw conflict('NO_OPEN_SHIFT', 'Belum ada shift terbuka. Buka shift terlebih dahulu.');
+  }
   const s = await currentShift(db);
   if (!s) throw conflict('NO_OPEN_SHIFT', 'Belum ada shift terbuka. Buka shift terlebih dahulu.');
   return s;

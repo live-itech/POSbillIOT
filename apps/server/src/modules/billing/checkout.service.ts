@@ -12,6 +12,10 @@ import { linesTotals, loadBillView, lockBill } from './bill-view';
 export interface CheckoutInput { idempotencyKey: string; expectedGrandTotal: number; payments: PaymentInput[]; approvalPin?: string }
 
 /** Jumlah per produk stok di bill (baris produk sama bisa lebih dari satu bila harganya berbeda). */
+// Urutkan per produk agar UPDATE baris Product tidak saling kunci terbalik antar checkout paralel.
+const sortedStockQty = (lines: { type: string; productId: string | null; qty: number }[]) =>
+  [...stockQtyByProduct(lines)].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+
 function stockQtyByProduct(lines: { type: string; productId: string | null; qty: number }[]): Map<string, number> {
   const m = new Map<string, number>();
   for (const l of lines) if (l.type === 'PRODUCT' && l.productId) m.set(l.productId, (m.get(l.productId) ?? 0) + l.qty);
@@ -57,7 +61,7 @@ export class CheckoutService {
         if (bill.status !== 'OPEN') throw conflict('BILL_NOT_OPEN', 'Bill sudah dibayar atau dibatalkan');
         if (bill.sessions.length) throw conflict('SESSION_ACTIVE', 'Hentikan sesi meja terlebih dahulu');
         if (!bill.lines.length) throw badRequest('BILL_EMPTY', 'Bill masih kosong');
-        const shift = await requireOpenShift(tx);
+        const shift = await requireOpenShift(tx, { lock: true });
 
         const totals = linesTotals(bill, settings);
         if (totals.grandTotal !== input.expectedGrandTotal) throw conflict('TOTAL_CHANGED', 'Total tagihan berubah. Periksa kembali sebelum membayar.');
@@ -73,9 +77,9 @@ export class CheckoutService {
             data: { billId, shiftId: shift.id, method: p.method, amount: p.amount, received: p.received, change: p.change, reference: p.reference, createdAt: now },
           });
         }
-        for (const [productId, qty] of stockQtyByProduct(bill.lines)) {
+        for (const [productId, qty] of sortedStockQty(bill.lines)) {
           await tx.product.update({ where: { id: productId }, data: { stockQty: { decrement: qty } } });
-          await tx.stockMovement.create({ data: { productId, qty: -qty, reason: 'SALE', billId, userId: user.id } });
+          await tx.stockMovement.create({ data: { productId, qty: -qty, reason: 'SALE', billId, userId: user.id, createdAt: now } });
         }
         await tx.bill.update({
           where: { id: billId },
@@ -112,14 +116,15 @@ export class CheckoutService {
       await lockBill(tx, billId);
       const bill = await tx.bill.findUniqueOrThrow({ where: { id: billId }, include: { lines: true } });
       if (bill.status !== 'PAID') throw conflict('BILL_NOT_PAID', 'Hanya bill lunas yang bisa di-void');
-      const shift = await requireOpenShift(tx);
-      for (const [productId, qty] of stockQtyByProduct(bill.lines)) {
+      const shift = await requireOpenShift(tx, { lock: true });
+      const now = clock.now();
+      for (const [productId, qty] of sortedStockQty(bill.lines)) {
         await tx.product.update({ where: { id: productId }, data: { stockQty: { increment: qty } } });
-        await tx.stockMovement.create({ data: { productId, qty, reason: 'VOID', billId, userId: user.id } });
+        await tx.stockMovement.create({ data: { productId, qty, reason: 'VOID', billId, userId: user.id, createdAt: now } });
       }
       await tx.bill.update({
         where: { id: billId },
-        data: { status: 'VOID', voidReason: input.reason, voidedById: user.id, voidedAt: clock.now(), voidShiftId: shift.id },
+        data: { status: 'VOID', voidReason: input.reason, voidedById: user.id, voidedAt: now, voidShiftId: shift.id },
       });
       await audit(tx, { userId: user.id, action: 'bill.void', entity: 'Bill', entityId: billId, approvedById, data: { reason: input.reason, grandTotal: bill.grandTotal } });
     });
