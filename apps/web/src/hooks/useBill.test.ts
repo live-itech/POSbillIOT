@@ -13,7 +13,7 @@ it('pratinjau menjumlahkan baris tersimpan + biaya waktu sesi yang masih berjala
       packageName: null, packageDurationMin: null, packagePrice: null,
       segments: [{ unitId: 'u1', unitTypeId: 'reg', startedAt: '2026-10-01T03:00:00.000Z', endedAt: null }], pauses: [],
     }],
-    payments: [], stored: null, paidAt: null, paidByName: null, shiftId: null, mergedIntoId: null, cancelReason: null, voidReason: null, voidedAt: null, kind: 'SALE', member: null,
+    payments: [], stored: null, paidAt: null, paidByName: null, shiftId: null, mergedIntoId: null, cancelReason: null, voidReason: null, voidedAt: null, kind: 'SALE', booking: null, member: null,
   };
   const tariffs = [{ id: 't', name: 'Reguler Siang', unitTypeId: 'reg', daysMask: 127, startMin: 480, endMin: 1080, pricePerHour: 40000, priority: 0 }];
   const p = computeBillPreview(bill, settings, tariffs, new Date('2026-10-01T03:30:00Z'));
@@ -29,7 +29,7 @@ it('pratinjau memakai snapshot diskon member — sama dengan server (Rp 51.200)'
       { id: 'l2', type: 'PRODUCT', productId: 'p', sessionId: null, name: 'Es Teh', unitPrice: 8000, qty: 2, discount: null, breakdown: null },
     ],
     activeSessions: [], payments: [], stored: null, paidAt: null, paidByName: null, shiftId: null, mergedIntoId: null, cancelReason: null, voidReason: null, voidedAt: null,
-    kind: 'SALE', member: { id: 'm1', code: 'M0001', name: 'Sinta', levelName: 'Gold', timeDiscountPct: 10, fnbDiscountPct: 5 },
+    kind: 'SALE', booking: null, member: { id: 'm1', code: 'M0001', name: 'Sinta', levelName: 'Gold', timeDiscountPct: 10, fnbDiscountPct: 5 },
   };
   const p = computeBillPreview(bill, settings, [], new Date('2026-10-01T04:00:00Z'));
   expect(p.totals).toMatchObject({ subtotal: 56000, memberDiscountTotal: 4800, grandTotal: 51200 });

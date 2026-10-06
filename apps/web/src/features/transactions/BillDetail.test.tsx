@@ -13,7 +13,7 @@ const paid: BillView = {
   activeSessions: [],
   payments: [{ id: 'pay1', method: 'CASH', amount: 15000, received: 20000, change: 5000, reference: null, createdAt: '2026-10-01T03:05:00.000Z' }],
   stored: { subtotal: 15000, discountTotal: 0, serviceTotal: 0, taxTotal: 0, grandTotal: 15000 },
-  paidAt: '2026-10-01T03:05:00.000Z', paidByName: 'Kasir', shiftId: 's1', mergedIntoId: null, cancelReason: null, voidReason: null, voidedAt: null, kind: 'SALE', member: null,
+  paidAt: '2026-10-01T03:05:00.000Z', paidByName: 'Kasir', shiftId: 's1', mergedIntoId: null, cancelReason: null, voidReason: null, voidedAt: null, kind: 'SALE', booking: null, member: null,
 };
 
 beforeEach(() => {

@@ -1,5 +1,6 @@
 import type { ChargeLine } from './billing/charge';
 import type { SessionView } from './views';
+import type { BillBookingView } from './bookings';
 import type { BillMemberView } from './members';
 
 export const PAYMENT_METHODS = ['CASH', 'QRIS', 'CARD', 'TRANSFER', 'DEPOSIT'] as const;
@@ -74,6 +75,8 @@ export interface BillView {
   kind: BillKind;
   /** Snapshot member saat dipasang (diskon level ikut di-snapshot). */
   member: BillMemberView | null;
+  /** Booking yang terhubung (bill SALE hasil check-in, atau bill DEPOSIT miliknya). */
+  booking: BillBookingView | null;
   createdAt: string;
   createdByName: string;
   billDiscount: Discount | null;
@@ -138,7 +141,13 @@ export interface PrintJobView {
   createdAt: string;
 }
 
-export interface CheckoutResult { bill: BillView; change: number }
+export interface CheckoutResult {
+  bill: BillView;
+  /** Kembalian tunai dari pembayaran CASH. */
+  change: number;
+  /** Kelebihan DP booking yang dikembalikan tunai. */
+  depositChange: number;
+}
 
 export interface TransactionSettings {
   taxPct: number;

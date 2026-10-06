@@ -1,7 +1,7 @@
 import type { Prisma, BillLine } from '@prisma/client';
 import {
   computeBillTotals, DISCOUNT_TYPES, lineScope,
-  type BillKind, type BillSummary, type BillTotals, type BillView, type ChargeLine, type Discount, type MemberDiscount, type PublicSettings,
+  type BillBookingView, type BillKind, type BillSummary, type BillTotals, type BillView, type ChargeLine, type Discount, type MemberDiscount, type PublicSettings,
   type TotalsLineInput,
 } from '@funplay/shared';
 import { z } from 'zod';
@@ -56,6 +56,24 @@ export async function lockBill(tx: Db, billId: string): Promise<void> {
   if (!rows.length) throw notFound('Bill');
 }
 
+/** Booking milik bill: bill DEPOSIT lewat `Booking.depositBillId`, bill SALE lewat `Bill.bookingId`. */
+export async function bookingOfBill(db: Db, bill: { id: string; kind: BillKind; bookingId: string | null }) {
+  if (bill.kind === 'DEPOSIT') return db.booking.findUnique({ where: { depositBillId: bill.id } });
+  return bill.bookingId ? db.booking.findUnique({ where: { id: bill.bookingId } }) : null;
+}
+
+/** `deposit.available` = bill DEPOSIT PAID dan DP belum dipakai, hangus, atau dikembalikan. */
+async function billBooking(db: Db, b: { id: string; kind: BillKind; bookingId: string | null }): Promise<BillBookingView | null> {
+  const bk = await bookingOfBill(db, b);
+  if (!bk) return null;
+  let deposit: BillBookingView['deposit'] = null;
+  if (b.kind === 'SALE' && bk.depositAmount > 0) {
+    const dep = bk.depositBillId ? await db.bill.findUnique({ where: { id: bk.depositBillId }, select: { status: true } }) : null;
+    deposit = { amount: bk.depositAmount, available: dep?.status === 'PAID' && bk.depositOutcome === null };
+  }
+  return { id: bk.id, customerName: bk.customerName, startAt: bk.startAt.toISOString(), status: bk.status, deposit };
+}
+
 const iso = (d: Date | null) => (d ? d.toISOString() : null);
 
 export async function toBillView(db: Db, b: BillRow): Promise<BillView> {
@@ -76,6 +94,7 @@ export async function toBillView(db: Db, b: BillRow): Promise<BillView> {
           fnbDiscountPct: b.memberFnbDiscountPct,
         }
       : null,
+    booking: await billBooking(db, b),
     createdAt: b.createdAt.toISOString(),
     createdByName: names.get(b.createdById) ?? '-',
     billDiscount: billDiscountOf(b),
