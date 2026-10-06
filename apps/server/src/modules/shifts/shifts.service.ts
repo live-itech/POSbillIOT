@@ -105,6 +105,7 @@ export class ShiftService {
       return updated;
     });
     this.ctx.bus.emit('shift.changed');
+    this.ctx.printing.later(() => this.ctx.printing.printShiftReport(user.id, closed.id));
     return closed;
   }
 }

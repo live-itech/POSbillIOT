@@ -22,6 +22,9 @@ import { unitsRoutes } from './modules/catalog/units.routes';
 import { DeviceManager } from './modules/devices/device-manager';
 import { devicesRoutes } from './modules/devices/devices.routes';
 import { createDefaultDriverFactory, type DriverFactory } from './modules/devices/driver';
+import { defaultPrinterFactory, type PrinterFactory } from './modules/printing/printer';
+import { PrintService } from './modules/printing/print.service';
+import { printingRoutes } from './modules/printing/printing.routes';
 import { attachRealtime } from './modules/realtime/realtime';
 import { Scheduler } from './modules/scheduler/scheduler';
 import { sessionsRoutes } from './modules/sessions/sessions.routes';
@@ -36,6 +39,7 @@ export interface BuildAppDeps {
   clock: Clock;
   config: Config;
   driverFactory?: DriverFactory;
+  printerFactory?: PrinterFactory;
   /** false di test: loop rekonsiliasi & scheduler tidak dijalankan otomatis. */
   startLoops?: boolean;
 }
@@ -56,6 +60,7 @@ export async function buildApp(deps: BuildAppDeps) {
   ctx.shifts = new ShiftService(ctx);
   ctx.bills = new BillService(ctx);
   ctx.checkout = new CheckoutService(ctx);
+  ctx.printing = new PrintService(ctx, deps.printerFactory ?? defaultPrinterFactory);
   ctx.scheduler = new Scheduler(ctx);
 
   registerErrorHandler(app);
@@ -79,6 +84,7 @@ export async function buildApp(deps: BuildAppDeps) {
       await api.register(shiftsRoutes(ctx));
       await api.register(billsRoutes(ctx));
       await api.register(checkoutRoutes(ctx));
+      await api.register(printingRoutes(ctx));
     },
     { prefix: '/api' },
   );
@@ -101,6 +107,7 @@ export async function buildApp(deps: BuildAppDeps) {
     ctx.scheduler.start();
   }
   app.addHook('onClose', async () => {
+    await ctx.printing.idle();
     ctx.scheduler.stop();
     await devices.stop();
   });

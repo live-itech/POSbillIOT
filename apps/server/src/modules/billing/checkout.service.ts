@@ -105,7 +105,7 @@ export class CheckoutService {
 
     this.ctx.bus.emit('bill.changed', billId);
     this.ctx.bus.emit('shift.changed');
-    // (Task 9) cetak struk setelah commit
+    this.ctx.printing.later(() => this.ctx.printing.printReceipt(user.id, billId));
     return finish(result);
   }
 
