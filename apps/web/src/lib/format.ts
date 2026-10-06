@@ -18,3 +18,37 @@ export function formatMinutes(min: number): string {
   if (!h) return `${m} menit`;
   return m ? `${h} jam ${m} menit` : `${h} jam`;
 }
+
+/** Ambil angka dari input uang ("150.000", "Rp 20.000"); kosong → 0. */
+export function parseRupiah(s: string): number {
+  const digits = s.replace(/\D/g, '');
+  return digits ? Number(digits) : 0;
+}
+
+const pad2 = (n: number) => String(n).padStart(2, '0');
+
+/** "YYYY-MM-DD" (hari lokal outlet) → rentang UTC [from, to). */
+export function localDayRange(date: string, utcOffsetMin: number): { from: string; to: string } {
+  const [y, m, d] = date.split('-').map(Number) as [number, number, number];
+  const from = Date.UTC(y, m - 1, d) - utcOffsetMin * 60_000;
+  return { from: new Date(from).toISOString(), to: new Date(from + 86_400_000).toISOString() };
+}
+
+/** Tanggal lokal outlet untuk <input type="date">. */
+export function localDateInput(now: Date, utcOffsetMin: number): string {
+  const l = new Date(now.getTime() + utcOffsetMin * 60_000);
+  return `${l.getUTCFullYear()}-${pad2(l.getUTCMonth() + 1)}-${pad2(l.getUTCDate())}`;
+}
+
+/** Jam lokal outlet "HH:MM" untuk <input type="time">. */
+export function localTimeInput(at: Date, utcOffsetMin: number): string {
+  const l = new Date(at.getTime() + utcOffsetMin * 60_000);
+  return `${pad2(l.getUTCHours())}:${pad2(l.getUTCMinutes())}`;
+}
+
+/** Tanggal "YYYY-MM-DD" + jam "HH:MM" lokal outlet → ISO UTC. */
+export function localDateTimeToIso(date: string, time: string, utcOffsetMin: number): string {
+  const [y, m, d] = date.split('-').map(Number) as [number, number, number];
+  const [hh, mm] = time.split(':').map(Number) as [number, number];
+  return new Date(Date.UTC(y, m - 1, d, hh, mm) - utcOffsetMin * 60_000).toISOString();
+}

@@ -1,7 +1,7 @@
 import type { BoardSnapshot, UnitView } from '@funplay/shared';
 import { io, type Socket } from 'socket.io-client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { loginAs, makeApp, resetDb, seedBasics, seedUsers } from './helpers';
+import { loginAs, makeApp, resetDb, seedBasics, openShift, seedUsers } from './helpers';
 
 let t: Awaited<ReturnType<typeof makeApp>>;
 let b: Awaited<ReturnType<typeof seedBasics>>;
@@ -10,7 +10,8 @@ let sockets: Socket[] = [];
 
 beforeEach(async () => {
   await resetDb();
-  await seedUsers();
+  const u = await seedUsers();
+  await openShift(u.kasir.id);
   b = await seedBasics();
   t = await makeApp();
   await t.app.listen({ port: 0, host: '127.0.0.1' });

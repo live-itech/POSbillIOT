@@ -1,14 +1,16 @@
-import { Prisma, type Session } from '@prisma/client';
+import { Prisma, type Booking, type Session } from '@prisma/client';
 import {
-  addMinutes, computeSessionCharge, findTariff, localDateKey, NoTariffError, sessionElapsedMs,
-  type ChargeSettings, type PublicUser, type SessionLike, type SessionMode, type TariffRule, type TimeCharge,
+  addMinutes, bookingsOverlap, computeSessionCharge, findTariff, isOnHold, localDateKey, localHHMM, NoTariffError, sessionElapsedMs,
+  type ChargeSettings, type PublicSettings, type PublicUser, type SessionLike, type SessionMode, type TariffRule, type TimeCharge,
 } from '@funplay/shared';
 import type { AppContext } from '../../context';
 import type { Db } from '../../db';
-import { badRequest, conflict, notFound } from '../../lib/errors';
+import { AppError, badRequest, conflict, notFound } from '../../lib/errors';
 import { audit } from '../audit/audit';
 import { approveWithPin } from '../auth/auth.service';
 import { loadTariffRules } from '../catalog/tariffs.service';
+import { memberSnapshot, requireActiveMember } from '../members/members.service';
+import { requireOpenShift } from '../shifts/shifts.service';
 import { getSettings } from '../settings/settings.service';
 
 export async function nextBillNumber(tx: Db, now: Date, utcOffsetMin: number): Promise<string> {
@@ -45,70 +47,120 @@ export function stopCharge(s: SessionLike, rules: TariffRule[], settings: Charge
   }
 }
 
+export interface StartInput { unitId: string; mode: SessionMode; packageId?: string; memberId?: string | null; ignoreBooking?: boolean }
+export interface StartEnv { now: Date; settings: PublicSettings }
+
+/**
+ * Booking BOOKED yang menghalangi sesi baru: sedang di-hold, atau (paket) jendelanya beririsan dengan
+ * [now, now + durasi paket). `exceptBookingId` = booking yang sedang check-in (hold miliknya tidak dihitung).
+ */
+export async function findBookingClash(
+  tx: Db, unitId: string, now: Date, packageMin: number | null, holdMin: number, exceptBookingId?: string,
+): Promise<Booking | null> {
+  const rows = await tx.booking.findMany({
+    where: {
+      unitId,
+      status: 'BOOKED',
+      startAt: { lte: addMinutes(now, Math.max(holdMin, packageMin ?? 0)) },
+      ...(exceptBookingId ? { id: { not: exceptBookingId } } : {}),
+    },
+    orderBy: { startAt: 'asc' },
+  });
+  return rows.find((x) => isOnHold(x, now, holdMin) || (packageMin !== null && bookingsOverlap(x, { startAt: now, durationMin: packageMin }))) ?? null;
+}
+
 export const sessionParts = { segments: { orderBy: { startedAt: 'asc' } }, pauses: { orderBy: { pausedAt: 'asc' } } } satisfies Prisma.SessionInclude;
 
 export class SessionService {
   constructor(protected readonly ctx: AppContext) {}
 
   /** Setelah commit: rekonsiliasi lampu (tanpa menunggu) dan beri tahu klien. */
-  protected touch(...unitIds: string[]): void {
+  touch(...unitIds: string[]): void {
     for (const id of unitIds) {
       void this.ctx.devices.applyUnit(id);
       this.ctx.bus.emit('unit.changed', id);
     }
   }
 
-  async start(user: PublicUser, input: { unitId: string; mode: SessionMode; packageId?: string }): Promise<Session> {
+  async start(user: PublicUser, input: StartInput): Promise<Session> {
     const { prisma, clock } = this.ctx;
-    const now = clock.now();
-    const settings = await getSettings(prisma);
+    const env: StartEnv = { now: clock.now(), settings: await getSettings(prisma) };
     const unitName = (await prisma.unit.findUnique({ where: { id: input.unitId }, select: { name: true } }))?.name ?? 'Meja';
-
     let session: Session;
     try {
-      session = await prisma.$transaction(async (tx) => {
-        const unit = await tx.unit.findUnique({ where: { id: input.unitId }, include: { activeSession: true } });
-        if (!unit) throw notFound('Meja');
-        if (unit.state === 'MAINTENANCE') throw conflict('UNIT_MAINTENANCE', `${unit.name} sedang maintenance`);
-        if (unit.activeSession) throw conflict('UNIT_BUSY', `${unit.name} sedang dipakai`);
-
-        let pkg: { id: string; name: string; durationMin: number; price: number } | null = null;
-        if (input.mode === 'PACKAGE') {
-          if (!input.packageId) throw badRequest('PACKAGE_REQUIRED', 'Pilih paket terlebih dahulu');
-          const p = await tx.package.findUnique({ where: { id: input.packageId } });
-          if (!p || !p.active) throw notFound('Paket');
-          if (p.unitTypeId !== unit.unitTypeId) throw badRequest('PACKAGE_MISMATCH', 'Paket ini tidak berlaku untuk tipe meja tersebut');
-          pkg = p;
-        } else {
-          findTariff(await loadTariffRules(tx), unit.unitTypeId, now, settings.utcOffsetMin); // gagal cepat bila tarif belum diatur
-        }
-
-        const bill = await tx.bill.create({ data: { number: await nextBillNumber(tx, now, settings.utcOffsetMin), createdById: user.id } });
-        const s = await tx.session.create({
-          data: {
-            billId: bill.id,
-            unitId: unit.id,
-            activeUnitId: unit.id,
-            mode: input.mode,
-            packageId: pkg?.id ?? null,
-            packageName: pkg?.name ?? null,
-            packageDurationMin: pkg?.durationMin ?? null,
-            packagePrice: pkg?.price ?? null,
-            startedAt: now,
-            plannedEndAt: pkg ? addMinutes(now, pkg.durationMin) : null,
-            startedById: user.id,
-            segments: { create: { unitId: unit.id, unitTypeId: unit.unitTypeId, startedAt: now } },
-          },
-        });
-        if (unit.lightOverride !== null) await tx.unit.update({ where: { id: unit.id }, data: { lightOverride: null } });
-        await audit(tx, { userId: user.id, action: 'session.start', entity: 'Session', entityId: s.id, data: { unitId: unit.id, mode: input.mode, packageId: pkg?.id ?? null } });
-        return s;
-      });
+      session = await prisma.$transaction((tx) => this.startTx(tx, user, input, env));
     } catch (err) {
       rethrowBusy(err, unitName);
     }
     this.touch(session.unitId);
     return session;
+  }
+
+  /**
+   * Inti mulai sesi di dalam transaksi pemanggil (dipakai juga check-in booking). Pemanggil wajib
+   * memanggil `touch(unitId)` setelah commit dan `rethrowBusy` bila gagal.
+   */
+  async startTx(tx: Db, user: PublicUser, input: StartInput, env: StartEnv, opts: { bookingId?: string } = {}): Promise<Session> {
+    const { now, settings } = env;
+    await requireOpenShift(tx);
+    const unit = await tx.unit.findUnique({ where: { id: input.unitId }, include: { activeSession: true } });
+    if (!unit) throw notFound('Meja');
+    if (unit.state === 'MAINTENANCE') throw conflict('UNIT_MAINTENANCE', `${unit.name} sedang maintenance`);
+    if (unit.activeSession) throw conflict('UNIT_BUSY', `${unit.name} sedang dipakai`);
+
+    let pkg: { id: string; name: string; durationMin: number; price: number } | null = null;
+    if (input.mode === 'PACKAGE') {
+      if (!input.packageId) throw badRequest('PACKAGE_REQUIRED', 'Pilih paket terlebih dahulu');
+      const p = await tx.package.findUnique({ where: { id: input.packageId } });
+      if (!p || !p.active) throw notFound('Paket');
+      if (p.unitTypeId !== unit.unitTypeId) throw badRequest('PACKAGE_MISMATCH', 'Paket ini tidak berlaku untuk tipe meja tersebut');
+      pkg = p;
+    } else {
+      findTariff(await loadTariffRules(tx), unit.unitTypeId, now, settings.utcOffsetMin); // gagal cepat bila tarif belum diatur
+    }
+
+    const clash = await findBookingClash(tx, unit.id, now, pkg?.durationMin ?? null, settings.bookingHoldMin, opts.bookingId);
+    if (clash && !input.ignoreBooking) {
+      throw new AppError(409, 'BOOKING_HOLD', `${unit.name} dibooking ${clash.customerName} jam ${localHHMM(clash.startAt, settings.utcOffsetMin)}`, {
+        booking: { id: clash.id, customerName: clash.customerName, startAt: clash.startAt.toISOString() },
+      });
+    }
+
+    const member = input.memberId ? await requireActiveMember(tx, input.memberId) : null;
+    const bill = await tx.bill.create({
+      data: {
+        number: await nextBillNumber(tx, now, settings.utcOffsetMin),
+        label: unit.name,
+        createdById: user.id,
+        bookingId: opts.bookingId ?? null,
+        ...memberSnapshot(member),
+      },
+    });
+    const s = await tx.session.create({
+      data: {
+        billId: bill.id,
+        unitId: unit.id,
+        activeUnitId: unit.id,
+        mode: input.mode,
+        packageId: pkg?.id ?? null,
+        packageName: pkg?.name ?? null,
+        packageDurationMin: pkg?.durationMin ?? null,
+        packagePrice: pkg?.price ?? null,
+        startedAt: now,
+        plannedEndAt: pkg ? addMinutes(now, pkg.durationMin) : null,
+        startedById: user.id,
+        segments: { create: { unitId: unit.id, unitTypeId: unit.unitTypeId, startedAt: now } },
+      },
+    });
+    if (unit.lightOverride !== null) await tx.unit.update({ where: { id: unit.id }, data: { lightOverride: null } });
+    await audit(tx, {
+      userId: user.id, action: 'session.start', entity: 'Session', entityId: s.id,
+      data: { unitId: unit.id, mode: input.mode, packageId: pkg?.id ?? null, memberId: member?.id ?? null, bookingId: opts.bookingId ?? null },
+    });
+    if (clash) {
+      await audit(tx, { userId: user.id, action: 'session.start_ignore_booking', entity: 'Booking', entityId: clash.id, data: { sessionId: s.id, unitId: unit.id } });
+    }
+    return s;
   }
 
   async stop(user: PublicUser, sessionId: string): Promise<{ session: Session; charge: TimeCharge }> {
@@ -140,6 +192,20 @@ export class SessionService {
           chargeTotal: charge.total, chargeDetail: charge as unknown as Prisma.InputJsonValue,
         },
       });
+      const unit = await tx.unit.findUnique({ where: { id: s.unitId }, select: { name: true } });
+      const modeLabel = s.mode === 'PACKAGE' ? (s.packageName ?? 'Paket') : 'Open billing';
+      await tx.billLine.create({
+        data: {
+          billId: s.billId,
+          type: 'TIME',
+          sessionId: s.id,
+          nameSnapshot: `${unit?.name ?? 'Meja'} - ${modeLabel}`,
+          unitPrice: charge.total,
+          qty: 1,
+          breakdown: charge.lines as unknown as Prisma.InputJsonValue,
+          createdById: user.id,
+        },
+      });
       await tx.unit.updateMany({ where: { id: s.unitId, lightOverride: { not: null } }, data: { lightOverride: null } });
       await audit(tx, { userId: user.id, action: 'session.stop', entity: 'Session', entityId: s.id, data: { total: charge.total } });
       if (charge.fallback || charge.noTariff) {
@@ -155,6 +221,7 @@ export class SessionService {
     });
 
     this.touch(result.session.unitId);
+    this.ctx.bus.emit('bill.changed', result.session.billId);
     return result;
   }
 

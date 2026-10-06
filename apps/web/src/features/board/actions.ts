@@ -4,13 +4,16 @@ import { api } from '../../lib/api';
 import { useBoard } from '../../stores/board';
 import { showError } from '../../stores/toast';
 
-export function useSessionAction() {
+/** `quiet(err)` true = error ditangani pemanggil (mis. konfirmasi BOOKING_HOLD), tidak di-toast. */
+export function useSessionAction(opts: { quiet?: (err: unknown) => boolean } = {}) {
   return useMutation({
     mutationFn: ({ path, body }: { path: string; body?: Record<string, unknown> }) => api<{ unit: UnitView }>('POST', path, body ?? {}),
     onSuccess: (r) => {
       useBoard.getState().applyActionUnit(r.unit);
       useBoard.getState().select(r.unit.id);
     },
-    onError: showError,
+    onError: (err) => {
+      if (!opts.quiet?.(err)) showError(err);
+    },
   });
 }

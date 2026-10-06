@@ -1,10 +1,12 @@
+import type { BookingSettings, UnitBookingView } from './bookings';
 import type { OutletType, Role, SessionMode, SessionStatus, UnitState } from './constants';
 import type { TariffRule } from './billing/tariff';
+import type { TransactionSettings } from './transactions';
 
 export interface PublicUser { id: string; name: string; username: string; role: Role }
 export interface UserDto extends PublicUser { active: boolean; hasPin: boolean }
 
-export interface PublicSettings {
+export interface PublicSettings extends TransactionSettings, BookingSettings {
   outletType: OutletType;
   outletName: string;
   address: string;
@@ -76,6 +78,8 @@ export interface UnitView extends UnitDto {
   /** null jika meja tidak terhubung device. */
   deviceOnline: boolean | null;
   session: SessionView | null;
+  /** Booking BOOKED terawal yang sedang menahan meja (hold), atau null. */
+  booking: UnitBookingView | null;
 }
 
 export interface DeviceStatusView {
@@ -88,7 +92,9 @@ export interface DeviceStatusView {
   lastSeenAt: string | null;
 }
 
-export type AlertType = 'SESSION_WARNING' | 'SESSION_EXPIRED' | 'DEVICE_OFFLINE' | 'DEVICE_ONLINE' | 'DEVICE_CMD_FAILED' | 'UNEXPECTED_ON';
+export type AlertType =
+  | 'SESSION_WARNING' | 'SESSION_EXPIRED' | 'DEVICE_OFFLINE' | 'DEVICE_ONLINE' | 'DEVICE_CMD_FAILED' | 'UNEXPECTED_ON'
+  | 'BOOKING_UPCOMING' | 'BOOKING_NO_SHOW';
 export interface AlertEvent {
   id: string;
   at: string;

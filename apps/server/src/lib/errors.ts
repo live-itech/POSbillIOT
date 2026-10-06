@@ -9,6 +9,8 @@ export class AppError extends Error {
     public readonly status: number,
     public readonly code: string,
     message: string,
+    /** Data tambahan untuk klien, mis. info booking pada BOOKING_HOLD. */
+    public readonly details?: Record<string, unknown>,
   ) {
     super(message);
   }
@@ -44,7 +46,7 @@ export function registerErrorHandler(app: FastifyInstance): void {
   installIndonesianZodErrors();
   app.setErrorHandler((err: FastifyError | Error, req, reply) => {
     if (err instanceof AppError) {
-      return reply.status(err.status).send({ error: { code: err.code, message: err.message } });
+      return reply.status(err.status).send({ error: { code: err.code, message: err.message, ...(err.details ? { details: err.details } : {}) } });
     }
     if (err instanceof ZodError) {
       return reply.status(400).send({ error: { code: 'VALIDATION', message: err.issues[0]?.message ?? 'Data tidak valid', issues: err.issues } });

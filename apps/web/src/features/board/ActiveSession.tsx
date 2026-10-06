@@ -9,6 +9,7 @@ import { useSessionAction } from './actions';
 import { ChargeLines } from './ChargeLines';
 import { ExtendDialog } from './ExtendDialog';
 import { MoveDialog } from './MoveDialog';
+import { BillItems } from '../orders/BillItems';
 import { StopDialog } from './StopDialog';
 import { useChargePreview } from './useChargePreview';
 
@@ -26,7 +27,7 @@ export function ActiveSession({ unit, session, status, now }: { unit: UnitView; 
   const offset = useBoard((s) => s.settings?.utcOffsetMin ?? 420);
   const charge = useChargePreview(session, now);
   const action = useSessionAction();
-  const [dialog, setDialog] = useState<null | 'extend' | 'move' | 'stop'>(null);
+  const [dialog, setDialog] = useState<null | 'extend' | 'move' | 'stop' | 'stopPay'>(null);
 
   const pause = async () => {
     const pin = await approvalPin(me.role, 'PIN supervisor untuk pause');
@@ -46,6 +47,7 @@ export function ActiveSession({ unit, session, status, now }: { unit: UnitView; 
         <Row label="Lampu" value={unit.light === null ? 'Tidak diketahui' : unit.light ? 'Menyala' : 'Mati'} />
       </div>
       <ChargeLines charge={charge} />
+      <BillItems billId={session.billId} />
       <div className="grid grid-cols-2 gap-2">
         {session.mode === 'PACKAGE' && (
           <Button variant="soft" onClick={() => setDialog('extend')}>+ Waktu</Button>
@@ -57,11 +59,14 @@ export function ActiveSession({ unit, session, status, now }: { unit: UnitView; 
           <Button variant="warning" onClick={pause} disabled={action.isPending || session.status !== 'RUNNING'}>Pause</Button>
         )}
       </div>
-      <Button variant="danger" size="lg" onClick={() => setDialog('stop')}>Stop</Button>
+      <div className="grid grid-cols-2 gap-2">
+        <Button variant="danger" size="lg" onClick={() => setDialog('stop')}>Stop</Button>
+        <Button size="lg" onClick={() => setDialog('stopPay')}>Stop & Bayar</Button>
+      </div>
 
       <ExtendDialog sessionId={session.id} open={dialog === 'extend'} onClose={() => setDialog(null)} />
       <MoveDialog sessionId={session.id} fromUnitId={unit.id} open={dialog === 'move'} onClose={() => setDialog(null)} />
-      <StopDialog unitName={unit.name} sessionId={session.id} preview={charge} open={dialog === 'stop'} onClose={() => setDialog(null)} />
+      <StopDialog unitName={unit.name} sessionId={session.id} billId={session.billId} andPay={dialog === 'stopPay'} preview={charge} open={dialog === 'stop' || dialog === 'stopPay'} onClose={() => setDialog(null)} />
     </div>
   );
 }

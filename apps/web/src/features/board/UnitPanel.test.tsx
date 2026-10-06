@@ -1,3 +1,4 @@
+import { DEFAULT_BOOKING_SETTINGS, DEFAULT_TRANSACTION_SETTINGS } from '@funplay/shared';
 import type { UnitView } from '@funplay/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, render, screen, waitFor } from '@testing-library/react';
@@ -9,7 +10,7 @@ import { UnitPanel } from './UnitPanel';
 
 const idle: UnitView = {
   id: 'u1', name: 'Meja 1', sortOrder: 1, unitTypeId: 'reg', unitTypeName: 'Reguler', unitTypeColor: '#7C3AED', area: '',
-  deviceId: null, relayChannel: null, state: 'ACTIVE', lightOverride: null, light: null, deviceOnline: null, session: null,
+  deviceId: null, relayChannel: null, state: 'ACTIVE', lightOverride: null, light: null, deviceOnline: null, booking: null, session: null,
 };
 
 function mockFetch() {
@@ -18,6 +19,7 @@ function mockFetch() {
     if (url === '/api/auth/me') return json({ user: { id: 'k', name: 'Kasir', username: 'kasir', role: 'KASIR' } });
     if (url === '/api/packages') return json([{ id: 'p1', name: 'Paket 2 Jam', unitTypeId: 'reg', durationMin: 120, price: 90000, active: true }]);
     if (url === '/api/sessions' && init?.method === 'POST') return json({ unit: { ...idle } });
+    if (url === '/api/shifts/current') return json({ summary: { shift: { id: 's1', openedAt: '2026-10-01T01:00:00.000Z', openedByName: 'Kasir' } } });
     return new Response('{}', { status: 404 });
   });
 }
@@ -25,7 +27,7 @@ function mockFetch() {
 beforeEach(() => {
   useBoard.setState({
     ...useBoard.getInitialState(),
-    settings: { outletType: 'BILLIARD', outletName: 'FunPlay', address: '', utcOffsetMin: 420, roundingBlockMin: 15, minChargeMin: 60, warnBeforeMin: 5, pauseKeepsLightOn: true, autoOffUnexpected: false },
+    settings: { outletType: 'BILLIARD', outletName: 'FunPlay', address: '', utcOffsetMin: 420, roundingBlockMin: 15, minChargeMin: 60, warnBeforeMin: 5, pauseKeepsLightOn: true, autoOffUnexpected: false, ...DEFAULT_TRANSACTION_SETTINGS, ...DEFAULT_BOOKING_SETTINGS },
     units: { u1: idle },
     order: ['u1'],
     selectedUnitId: 'u1',

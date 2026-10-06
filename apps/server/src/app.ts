@@ -6,20 +6,34 @@ import type { Config } from './config';
 import type { AppContext } from './context';
 import { Bus } from './lib/bus';
 import type { Clock } from './lib/clock';
+import { BillService } from './modules/billing/bills.service';
+import { billsRoutes } from './modules/billing/bills.routes';
+import { CheckoutService } from './modules/billing/checkout.service';
+import { checkoutRoutes } from './modules/billing/checkout.routes';
+import { BookingService } from './modules/bookings/bookings.service';
+import { bookingsRoutes } from './modules/bookings/bookings.routes';
 import { registerErrorHandler } from './lib/errors';
 import { authRoutes } from './modules/auth/auth.routes';
 import { installAuth } from './modules/auth/guard';
 import { packagesRoutes } from './modules/catalog/packages.routes';
+import { categoriesRoutes } from './modules/catalog/categories.routes';
+import { productsRoutes } from './modules/catalog/products.routes';
+import { membersRoutes } from './modules/members/members.routes';
 import { tariffsRoutes } from './modules/catalog/tariffs.routes';
 import { unitTypesRoutes } from './modules/catalog/unit-types.routes';
 import { unitsRoutes } from './modules/catalog/units.routes';
 import { DeviceManager } from './modules/devices/device-manager';
 import { devicesRoutes } from './modules/devices/devices.routes';
 import { createDefaultDriverFactory, type DriverFactory } from './modules/devices/driver';
+import { defaultPrinterFactory, type PrinterFactory } from './modules/printing/printer';
+import { PrintService } from './modules/printing/print.service';
+import { printingRoutes } from './modules/printing/printing.routes';
 import { attachRealtime } from './modules/realtime/realtime';
 import { Scheduler } from './modules/scheduler/scheduler';
 import { sessionsRoutes } from './modules/sessions/sessions.routes';
 import { SessionService } from './modules/sessions/sessions.service';
+import { shiftsRoutes } from './modules/shifts/shifts.routes';
+import { ShiftService } from './modules/shifts/shifts.service';
 import { settingsRoutes } from './modules/settings/settings.routes';
 import { usersRoutes } from './modules/users/users.routes';
 
@@ -28,6 +42,7 @@ export interface BuildAppDeps {
   clock: Clock;
   config: Config;
   driverFactory?: DriverFactory;
+  printerFactory?: PrinterFactory;
   /** false di test: loop rekonsiliasi & scheduler tidak dijalankan otomatis. */
   startLoops?: boolean;
 }
@@ -45,6 +60,11 @@ export async function buildApp(deps: BuildAppDeps) {
   });
   const ctx = { prisma: deps.prisma, clock: deps.clock, config: deps.config, bus, devices } as AppContext;
   ctx.sessions = new SessionService(ctx);
+  ctx.shifts = new ShiftService(ctx);
+  ctx.bills = new BillService(ctx);
+  ctx.checkout = new CheckoutService(ctx);
+  ctx.bookings = new BookingService(ctx);
+  ctx.printing = new PrintService(ctx, deps.printerFactory ?? defaultPrinterFactory);
   ctx.scheduler = new Scheduler(ctx);
 
   registerErrorHandler(app);
@@ -61,8 +81,16 @@ export async function buildApp(deps: BuildAppDeps) {
       await api.register(unitsRoutes(ctx));
       await api.register(tariffsRoutes(ctx));
       await api.register(packagesRoutes(ctx));
+      await api.register(categoriesRoutes(ctx));
+      await api.register(productsRoutes(ctx));
+      await api.register(membersRoutes(ctx));
       await api.register(devicesRoutes(ctx));
       await api.register(sessionsRoutes(ctx));
+      await api.register(shiftsRoutes(ctx));
+      await api.register(billsRoutes(ctx));
+      await api.register(checkoutRoutes(ctx));
+      await api.register(bookingsRoutes(ctx));
+      await api.register(printingRoutes(ctx));
     },
     { prefix: '/api' },
   );
@@ -85,6 +113,7 @@ export async function buildApp(deps: BuildAppDeps) {
     ctx.scheduler.start();
   }
   app.addHook('onClose', async () => {
+    await ctx.printing.idle();
     ctx.scheduler.stop();
     await devices.stop();
   });

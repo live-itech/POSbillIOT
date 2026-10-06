@@ -5,16 +5,18 @@ import { Modal } from '../../components/ui/modal';
 import { api } from '../../lib/api';
 import { formatRupiah } from '../../lib/format';
 import { useBoard } from '../../stores/board';
+import { useCheckout } from '../../stores/checkout';
 import { showError, toast } from '../../stores/toast';
 import { ChargeLines } from './ChargeLines';
 
-export function StopDialog(props: { unitName: string; sessionId: string; preview: TimeCharge | null; open: boolean; onClose: () => void }) {
+export function StopDialog(props: { unitName: string; sessionId: string; billId: string; andPay?: boolean; preview: TimeCharge | null; open: boolean; onClose: () => void }) {
   const stop = useMutation({
     mutationFn: () => api<{ unit: UnitView; charge: TimeCharge }>('POST', `/sessions/${props.sessionId}/stop`, {}),
     onSuccess: (r) => {
       useBoard.getState().applyActionUnit(r.unit);
       toast.success(`${props.unitName} selesai. Total waktu ${formatRupiah(r.charge.total)}`);
       props.onClose();
+      if (props.andPay) useCheckout.getState().open(props.billId);
     },
     onError: showError,
   });
@@ -27,7 +29,7 @@ export function StopDialog(props: { unitName: string; sessionId: string; preview
       footer={
         <>
           <Button variant="ghost" onClick={props.onClose}>Batal</Button>
-          <Button variant="danger" onClick={() => stop.mutate()} disabled={stop.isPending}>Ya, stop</Button>
+          <Button variant="danger" onClick={() => stop.mutate()} disabled={stop.isPending}>{props.andPay ? 'Ya, stop & bayar' : 'Ya, stop'}</Button>
         </>
       }
     >

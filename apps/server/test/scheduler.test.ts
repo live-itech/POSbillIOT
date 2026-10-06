@@ -1,6 +1,6 @@
 import type { AlertEvent } from '@funplay/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { loginAs, makeApp, prisma, resetDb, seedBasics, seedUsers, T0 } from './helpers';
+import { loginAs, makeApp, prisma, resetDb, seedBasics, openShift, seedUsers, T0 } from './helpers';
 
 let t: Awaited<ReturnType<typeof makeApp>>;
 let b: Awaited<ReturnType<typeof seedBasics>>;
@@ -9,7 +9,8 @@ let alerts: AlertEvent[];
 
 beforeEach(async () => {
   await resetDb();
-  await seedUsers();
+  const u = await seedUsers();
+  await openShift(u.kasir.id);
   b = await seedBasics();
   t = await makeApp();
   cookie = await loginAs(t.app, 'kasir');

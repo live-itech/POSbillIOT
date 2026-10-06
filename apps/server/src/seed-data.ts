@@ -49,6 +49,31 @@ const PLAYSTATION: TypeSeed[] = [
   },
 ];
 
+interface CategorySeed { name: string; color: string; products: { name: string; price: number; kind: 'STOCK' | 'SERVICE'; stockQty: number }[] }
+
+const FNB: CategorySeed[] = [
+  {
+    name: 'Minuman', color: '#06B6D4',
+    products: [
+      { name: 'Es Teh Manis', price: 8000, kind: 'STOCK', stockQty: 50 },
+      { name: 'Kopi Susu', price: 15000, kind: 'STOCK', stockQty: 30 },
+      { name: 'Air Mineral', price: 6000, kind: 'STOCK', stockQty: 48 },
+    ],
+  },
+  {
+    name: 'Makanan', color: '#F59E0B',
+    products: [
+      { name: 'Mie Goreng', price: 15000, kind: 'STOCK', stockQty: 20 },
+      { name: 'Kentang Goreng', price: 18000, kind: 'STOCK', stockQty: 20 },
+    ],
+  },
+];
+
+const SERVICES: Record<OutletType, CategorySeed> = {
+  BILLIARD: { name: 'Layanan', color: '#7C3AED', products: [{ name: 'Sewa Stick Premium', price: 10000, kind: 'SERVICE', stockQty: 0 }] },
+  PLAYSTATION: { name: 'Layanan', color: '#7C3AED', products: [{ name: 'Stik Tambahan', price: 5000, kind: 'SERVICE', stockQty: 0 }] },
+};
+
 export async function seedDemo(prisma: PrismaClient, outletType: OutletType): Promise<boolean> {
   if ((await prisma.user.count()) > 0) return false;
 
@@ -82,6 +107,11 @@ export async function seedDemo(prisma: PrismaClient, outletType: OutletType): Pr
         channel++;
       }
     }
+    for (const [i, c] of [...FNB, SERVICES[outletType]].entries()) {
+      const cat = await tx.category.create({ data: { name: c.name, color: c.color, sortOrder: i } });
+      await tx.product.createMany({ data: c.products.map((p) => ({ ...p, categoryId: cat.id })) });
+    }
+    await tx.memberLevel.create({ data: { name: 'Reguler', timeDiscountPct: 0, fnbDiscountPct: 0, sortOrder: 0 } });
     return true;
   });
 }

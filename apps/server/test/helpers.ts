@@ -5,6 +5,7 @@ import { buildApp } from '../src/app';
 import { loadConfig } from '../src/config';
 import { FakeClock } from '../src/lib/clock';
 import { hashSecret } from '../src/modules/auth/password';
+import type { PrinterFactory } from '../src/modules/printing/printer';
 import type { DriverFactory } from '../src/modules/devices/driver';
 import { SimulatorDriver } from '../src/modules/devices/simulator.driver';
 
@@ -20,7 +21,7 @@ export async function resetDb(): Promise<void> {
   await prisma.$executeRawUnsafe(`TRUNCATE ${rows.map((r) => `"${r.tablename}"`).join(', ')} RESTART IDENTITY CASCADE`);
 }
 
-export async function makeApp(opts: { now?: Date; configure?: (app: FastifyInstance) => void } = {}) {
+export async function makeApp(opts: { now?: Date; printerFactory?: PrinterFactory; configure?: (app: FastifyInstance) => void } = {}) {
   const clock = new FakeClock(opts.now ?? T0);
   const sims = new Map<string, SimulatorDriver>();
   const driverFactory: DriverFactory = (row) => {
@@ -28,7 +29,7 @@ export async function makeApp(opts: { now?: Date; configure?: (app: FastifyInsta
     sims.set(row.id, s);
     return s;
   };
-  const { app, ctx } = await buildApp({ prisma, clock, config: loadConfig(), driverFactory, startLoops: false });
+  const { app, ctx } = await buildApp({ prisma, clock, config: loadConfig(), driverFactory, printerFactory: opts.printerFactory, startLoops: false });
   opts.configure?.(app);
   await app.ready();
   await ctx.devices.reconcileAll();
@@ -80,4 +81,8 @@ export async function seedBasics() {
   const pkg1 = await prisma.package.create({ data: { name: 'Paket 1 Jam', unitTypeId: reg.id, durationMin: 60, price: 45000 } });
   const pkg2 = await prisma.package.create({ data: { name: 'Paket 2 Jam', unitTypeId: reg.id, durationMin: 120, price: 90000 } });
   return { reg, vip, device, m1, m2, v1, pkg1, pkg2 };
+}
+
+export async function openShift(userId: string, openingCash = 0) {
+  return prisma.shift.create({ data: { openedById: userId, openedAt: T0, openingCash, openFlag: true } });
 }

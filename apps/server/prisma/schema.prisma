@@ -39,6 +39,75 @@ enum BillStatus {
   OPEN
   PAID
   VOID
+  CANCELLED
+}
+
+enum Scope {
+  NONE
+  BILLING
+  FNB
+  ALL
+}
+
+enum ProductKind {
+  STOCK
+  SERVICE
+}
+
+enum LineType {
+  TIME
+  PRODUCT
+  SERVICE
+  CUSTOM
+  DEPOSIT
+}
+
+enum DiscountType {
+  AMOUNT
+  PERCENT
+}
+
+enum PaymentMethod {
+  CASH
+  QRIS
+  CARD
+  TRANSFER
+  DEPOSIT
+}
+
+enum BillKind {
+  SALE
+  DEPOSIT
+}
+
+enum BookingStatus {
+  BOOKED
+  CHECKED_IN
+  NO_SHOW
+  CANCELLED
+}
+
+enum DepositOutcome {
+  USED
+  FORFEITED
+  REFUNDED
+}
+
+enum StockReason {
+  SALE
+  VOID
+}
+
+enum PrintKind {
+  RECEIPT
+  SHIFT_REPORT
+  TEST
+}
+
+enum PrintStatus {
+  PENDING
+  DONE
+  FAILED
 }
 
 enum DeviceEventType {
@@ -62,6 +131,19 @@ model Setting {
   warnBeforeMin     Int        @default(5)
   pauseKeepsLightOn Boolean    @default(true)
   autoOffUnexpected Boolean    @default(false)
+  taxPct              Int      @default(0)
+  taxScope            Scope    @default(ALL)
+  servicePct          Int      @default(0)
+  serviceScope        Scope    @default(ALL)
+  discountApprovalPct Int      @default(10)
+  receiptHeader       String   @default("")
+  receiptFooter       String   @default("Terima kasih!")
+  printerDriver       String   @default("SIMULATOR")
+  printerDevicePath   String   @default("/dev/usb/lp0")
+  printerHost         String   @default("")
+  printerPort         Int      @default(9100)
+  bookingHoldMin      Int      @default(15)
+  bookingNoShowMin    Int      @default(15)
   updatedAt         DateTime   @updatedAt
 }
 
@@ -134,6 +216,7 @@ model Unit {
   sessions      Session[]        @relation("UnitSessions")
   activeSession Session?         @relation("ActiveSession")
   segments      SessionSegment[]
+  bookings      Booking[]
 
   @@unique([deviceId, relayChannel])
 }
@@ -171,15 +254,166 @@ model BillCounter {
   last Int
 }
 
-/// M1 hanya membuat Bill OPEN per sesi; checkout, baris & pembayaran ditambah di M2.
 model Bill {
-  id          String     @id @default(cuid())
-  number      String     @unique
-  status      BillStatus @default(OPEN)
-  createdById String
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
-  sessions    Session[]
+  id                String        @id @default(cuid())
+  number            String        @unique
+  label             String        @default("")
+  status            BillStatus    @default(OPEN)
+  createdById       String
+  shiftId           String?
+  shift             Shift?        @relation("BillShift", fields: [shiftId], references: [id])
+  billDiscountType  DiscountType?
+  billDiscountValue Int           @default(0)
+  subtotal          Int           @default(0)
+  discountTotal     Int           @default(0)
+  serviceTotal      Int           @default(0)
+  taxTotal          Int           @default(0)
+  grandTotal        Int           @default(0)
+  paidAt            DateTime?
+  paidById          String?
+  /// Idempotency key checkout; unik → satu checkout per bill.
+  checkoutKey       String?       @unique
+  mergedIntoId      String?
+  cancelReason      String?
+  voidReason        String?
+  voidedById        String?
+  voidedAt          DateTime?
+  voidShiftId       String?
+  voidShift         Shift?        @relation("BillVoidShift", fields: [voidShiftId], references: [id])
+  kind                  BillKind      @default(SALE)
+  memberId              String?
+  member                Member?       @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  /// Snapshot saat member dipasang (tidak berubah walau member/level diedit).
+  memberName            String?
+  memberLevelName       String?
+  memberTimeDiscountPct Int           @default(0)
+  memberFnbDiscountPct  Int           @default(0)
+  /// Bill SALE milik booking (check-in). Tanpa relasi Prisma: Booking juga menunjuk Bill.
+  bookingId             String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  sessions          Session[]
+  lines             BillLine[]
+  payments          Payment[]
+  stockMovements    StockMovement[]
+
+  @@index([status])
+  @@index([createdAt])
+  @@index([bookingId])
+}
+
+model BillLine {
+  id            String        @id @default(cuid())
+  billId        String
+  bill          Bill          @relation(fields: [billId], references: [id])
+  type          LineType
+  productId     String?
+  product       Product?      @relation(fields: [productId], references: [id], onDelete: Restrict)
+  /// Baris TIME: satu per sesi.
+  sessionId     String?       @unique
+  nameSnapshot  String
+  unitPrice     Int
+  qty           Int
+  discountType  DiscountType?
+  discountValue Int           @default(0)
+  breakdown     Json?
+  createdById   String
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([billId])
+}
+
+model Category {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  color     String    @default("#7C3AED")
+  sortOrder Int       @default(0)
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  products  Product[]
+}
+
+model Product {
+  id         String          @id @default(cuid())
+  name       String          @unique
+  categoryId String
+  category   Category        @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  kind       ProductKind
+  price      Int
+  stockQty   Int             @default(0)
+  active     Boolean         @default(true)
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+  lines      BillLine[]
+  movements  StockMovement[]
+}
+
+model Payment {
+  id        String        @id @default(cuid())
+  billId    String
+  bill      Bill          @relation(fields: [billId], references: [id])
+  shiftId   String
+  shift     Shift         @relation(fields: [shiftId], references: [id])
+  method    PaymentMethod
+  /// Bagian tagihan yang ditutup metode ini.
+  amount    Int
+  received  Int?
+  change    Int?
+  reference String?
+  createdAt DateTime      @default(now())
+
+  @@index([shiftId])
+  @@index([billId])
+}
+
+model Shift {
+  id          String    @id @default(cuid())
+  openedById  String
+  openedAt    DateTime
+  openingCash Int
+  closedById  String?
+  closedAt    DateTime?
+  countedCash Int?
+  expectedCash Int?
+  note        String?
+  /// true selama terbuka, null setelah ditutup; unik → hanya satu shift terbuka.
+  openFlag    Boolean?  @unique @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  payments    Payment[]
+  bills       Bill[]    @relation("BillShift")
+  voidedBills Bill[]    @relation("BillVoidShift")
+}
+
+model StockMovement {
+  id        String      @id @default(cuid())
+  productId String
+  product   Product     @relation(fields: [productId], references: [id])
+  qty       Int
+  reason    StockReason
+  billId    String
+  bill      Bill        @relation(fields: [billId], references: [id])
+  userId    String
+  createdAt DateTime    @default(now())
+
+  @@unique([billId, productId, reason])
+}
+
+model PrintJob {
+  id            String      @id @default(cuid())
+  kind          PrintKind
+  billId        String?
+  shiftId       String?
+  status        PrintStatus @default(PENDING)
+  error         String?
+  previewText   String
+  requestedById String
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([createdAt])
 }
 
 model Session {
@@ -268,4 +502,67 @@ model DeviceEvent {
   detail   Json            @default("{}")
 
   @@index([deviceId, at])
+}
+
+model MemberLevel {
+  id              String   @id @default(cuid())
+  name            String   @unique
+  timeDiscountPct Int      @default(0)
+  fnbDiscountPct  Int      @default(0)
+  sortOrder       Int      @default(0)
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  members         Member[]
+}
+
+model Member {
+  id        String      @id @default(cuid())
+  code      String      @unique
+  name      String
+  phone     String      @default("")
+  levelId   String
+  level     MemberLevel @relation(fields: [levelId], references: [id], onDelete: Restrict)
+  active    Boolean     @default(true)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  bills     Bill[]
+  bookings  Booking[]
+
+  @@index([phone])
+}
+
+/// Satu baris (id = 1). `next` = nomor member berikutnya; barisnya dikunci untuk setiap penulisan member.
+model MemberCounter {
+  id   Int @id @default(1)
+  next Int @default(1)
+}
+
+model Booking {
+  id                String          @id @default(cuid())
+  unitId            String
+  unit              Unit            @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  customerName      String
+  phone             String          @default("")
+  memberId          String?
+  member            Member?         @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  startAt           DateTime
+  durationMin       Int
+  note              String          @default("")
+  status            BookingStatus   @default(BOOKED)
+  depositAmount     Int             @default(0)
+  /// Bill DEPOSIT (DP). Tanpa relasi Prisma (lihat Bill.bookingId).
+  depositBillId     String?         @unique
+  depositOutcome    DepositOutcome?
+  depositUsedAmount Int             @default(0)
+  /// Bill SALE yang dibuat saat check-in.
+  saleBillId        String?         @unique
+  holdNotifiedAt    DateTime?
+  cancelReason      String?
+  createdById       String
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@index([unitId, startAt])
+  @@index([status, startAt])
 }

@@ -44,6 +44,10 @@ export function attachRealtime(app: FastifyInstance, ctx: AppContext): Server {
   });
   ctx.bus.on('alert', (a) => room().emit('alert', a));
   ctx.bus.on('device.changed', (d) => room().emit('device', d));
+  ctx.bus.on('bill.changed', (id) => room().emit('bill', { id }));
+  ctx.bus.on('shift.changed', () => room().emit('shift'));
+  ctx.bus.on('booking.changed', (id) => room().emit('booking', { id }));
+  ctx.bus.on('print.job', (job) => room().emit('printJob', job));
 
   app.addHook('onClose', async () => {
     await io.close();

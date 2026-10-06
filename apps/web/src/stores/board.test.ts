@@ -1,15 +1,16 @@
+import { DEFAULT_BOOKING_SETTINGS, DEFAULT_TRANSACTION_SETTINGS } from '@funplay/shared';
 import type { BoardSnapshot, UnitView } from '@funplay/shared';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { computeOffset, useBoard } from './board';
 
 const unit = (id: string, name: string, sortOrder: number): UnitView => ({
   id, name, sortOrder, unitTypeId: 'reg', unitTypeName: 'Reguler', unitTypeColor: '#7C3AED', area: '', deviceId: null,
-  relayChannel: null, state: 'ACTIVE', lightOverride: null, light: null, deviceOnline: null, session: null,
+  relayChannel: null, state: 'ACTIVE', lightOverride: null, light: null, deviceOnline: null, booking: null, session: null,
 });
 
 const snapshot = (units: UnitView[]): BoardSnapshot => ({
   serverTime: '2026-10-01T03:10:00.000Z',
-  settings: { outletType: 'BILLIARD', outletName: 'FunPlay', address: '', utcOffsetMin: 420, roundingBlockMin: 15, minChargeMin: 60, warnBeforeMin: 5, pauseKeepsLightOn: true, autoOffUnexpected: false },
+  settings: { outletType: 'BILLIARD', outletName: 'FunPlay', address: '', utcOffsetMin: 420, roundingBlockMin: 15, minChargeMin: 60, warnBeforeMin: 5, pauseKeepsLightOn: true, autoOffUnexpected: false, ...DEFAULT_TRANSACTION_SETTINGS, ...DEFAULT_BOOKING_SETTINGS },
   units, devices: [], tariffs: [],
 });
 

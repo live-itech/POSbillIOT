@@ -1,4 +1,4 @@
-import type { UnitView } from '@funplay/shared';
+import { localHHMM, type UnitView } from '@funplay/shared';
 import { Lightbulb, LightbulbOff, WifiOff } from 'lucide-react';
 import { cn } from '../../lib/cn';
 import { formatRupiah } from '../../lib/format';
@@ -27,6 +27,11 @@ export function UnitCard({ unit, now, selected, onSelect }: { unit: UnitView; no
   const status = unitStatusOf(unit, now, warnBeforeMin);
   const charge = useChargePreview(unit.session, now);
   const style = STATUS_STYLE[status];
+  const offset = useBoard((s) => s.settings?.utcOffsetMin ?? 420);
+  const booked = !unit.session && unit.state === 'ACTIVE' ? unit.booking : null;
+  const bookedText = booked
+    ? `Booked · ${booked.customerName} ${localHHMM(new Date(booked.startAt), offset)}${booked.depositPaid ? ' 💰' : ''}`
+    : null;
 
   return (
     <button
@@ -34,10 +39,11 @@ export function UnitCard({ unit, now, selected, onSelect }: { unit: UnitView; no
       onClick={onSelect}
       data-testid={`unit-card-${unit.name}`}
       data-status={status}
+      data-booked={booked ? 'true' : undefined}
       data-light={unit.light === null ? 'unknown' : unit.light ? 'on' : 'off'}
       className={cn(
         'flex min-h-32 flex-col justify-between rounded-2xl p-3 text-left transition active:scale-[.98]',
-        style.card,
+        booked ? 'border-2 border-cyan-300 bg-[#CFFAFE] text-cyan-950' : style.card,
         selected && 'ring-4 ring-accent ring-offset-2 ring-offset-bg',
       )}
     >
@@ -53,7 +59,7 @@ export function UnitCard({ unit, now, selected, onSelect }: { unit: UnitView; no
       </div>
       <div className="text-2xl font-extrabold tabular-nums">{timerText(unit, status, now)}</div>
       <div className="flex items-center justify-between text-xs font-semibold opacity-90">
-        <span>{style.label}</span>
+        <span>{bookedText ?? style.label}</span>
         {charge && <span className="tabular-nums">{formatRupiah(charge.total)}</span>}
       </div>
     </button>
