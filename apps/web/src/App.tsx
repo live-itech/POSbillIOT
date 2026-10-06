@@ -2,6 +2,7 @@ import { Route, Routes } from 'react-router';
 import { PinPrompt } from './components/PinPrompt';
 import { Toaster } from './components/Toaster';
 import { RequireAuth, RequireRole } from './features/auth/auth';
+import { CheckoutHost } from './features/checkout/CheckoutDialog';
 import { BoardPage } from './features/board/BoardPage';
 import { LoginPage } from './features/auth/LoginPage';
 import { AppShell } from './features/layout/AppShell';
@@ -43,6 +44,7 @@ export function App() {
       </Routes>
       <Toaster />
       <PinPrompt />
+      <CheckoutHost />
     </>
   );
 }
