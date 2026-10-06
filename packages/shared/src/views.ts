@@ -1,4 +1,4 @@
-import type { BookingSettings } from './bookings';
+import type { BookingSettings, UnitBookingView } from './bookings';
 import type { OutletType, Role, SessionMode, SessionStatus, UnitState } from './constants';
 import type { TariffRule } from './billing/tariff';
 import type { TransactionSettings } from './transactions';
@@ -78,6 +78,8 @@ export interface UnitView extends UnitDto {
   /** null jika meja tidak terhubung device. */
   deviceOnline: boolean | null;
   session: SessionView | null;
+  /** Booking BOOKED terawal yang sedang menahan meja (hold), atau null. */
+  booking: UnitBookingView | null;
 }
 
 export interface DeviceStatusView {

@@ -5,7 +5,7 @@ import { computeOffset, useBoard } from './board';
 
 const unit = (id: string, name: string, sortOrder: number): UnitView => ({
   id, name, sortOrder, unitTypeId: 'reg', unitTypeName: 'Reguler', unitTypeColor: '#7C3AED', area: '', deviceId: null,
-  relayChannel: null, state: 'ACTIVE', lightOverride: null, light: null, deviceOnline: null, session: null,
+  relayChannel: null, state: 'ACTIVE', lightOverride: null, light: null, deviceOnline: null, booking: null, session: null,
 });
 
 const snapshot = (units: UnitView[]): BoardSnapshot => ({

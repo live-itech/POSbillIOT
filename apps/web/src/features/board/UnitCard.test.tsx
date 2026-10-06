@@ -7,7 +7,7 @@ import { UnitCard } from './UnitCard';
 
 const base: UnitView = {
   id: 'u1', name: 'Meja 1', sortOrder: 1, unitTypeId: 'reg', unitTypeName: 'Reguler', unitTypeColor: '#7C3AED', area: '',
-  deviceId: 'd1', relayChannel: 1, state: 'ACTIVE', lightOverride: null, light: true, deviceOnline: true,
+  deviceId: 'd1', relayChannel: 1, state: 'ACTIVE', lightOverride: null, light: true, deviceOnline: true, booking: null,
   session: {
     id: 's1', billId: 'b1', mode: 'PACKAGE', status: 'RUNNING', startedAt: '2026-10-01T03:00:00.000Z',
     plannedEndAt: '2026-10-01T04:00:00.000Z', endedAt: null, packageName: 'Paket 1 Jam', packageDurationMin: 60, packagePrice: 45000,

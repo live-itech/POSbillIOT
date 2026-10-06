@@ -1,13 +1,14 @@
 import {
-  addMinutes, bookingsOverlap, bookingWindow, formatReceiptDate, localHHMM,
-  type BookingStatus, type BookingView, type CreateBookingResult, type PublicUser,
+  addMinutes, bookingsOverlap, bookingWindow, formatReceiptDate, holdStartsAt, isOnHold, localHHMM,
+  type BookingStatus, type BookingView, type CreateBookingResult, type PublicUser, type SessionMode,
 } from '@funplay/shared';
 import type { AppContext } from '../../context';
 import type { Db } from '../../db';
 import { badRequest, conflict, notFound } from '../../lib/errors';
 import { audit } from '../audit/audit';
+import { lockBill } from '../billing/bill-view';
 import { requireActiveMember } from '../members/members.service';
-import { nextBillNumber } from '../sessions/sessions.service';
+import { nextBillNumber, rethrowBusy } from '../sessions/sessions.service';
 import { getSettings } from '../settings/settings.service';
 import { requireOpenShift } from '../shifts/shifts.service';
 import { lockBooking } from './booking-lock';
@@ -195,5 +196,52 @@ export class BookingService {
     });
     this.changed(id, r.from, r.to);
     return loadBookingView(prisma, id);
+  }
+
+  /**
+   * Check-in: mulai sesi (Open/Paket) dengan bill SALE baru yang terhubung ke booking & member booking.
+   * Urutan kunci: bill DEPOSIT → Booking → (mulai sesi: BillCounter, Unit). Bill DP yang belum dibayar dibatalkan.
+   */
+  async checkIn(user: PublicUser, id: string, input: { mode: SessionMode; packageId?: string }): Promise<{ unitId: string }> {
+    const { prisma, clock } = this.ctx;
+    const now = clock.now();
+    const settings = await getSettings(prisma);
+    const pre = await prisma.booking.findUnique({ where: { id }, include: { unit: { select: { name: true } } } });
+    if (!pre) throw notFound('Booking');
+    let r: { unitId: string; cancelledDepositBillId: string | null };
+    try {
+      r = await prisma.$transaction(async (tx) => {
+        if (pre.depositBillId) await lockBill(tx, pre.depositBillId);
+        await lockBooking(tx, id);
+        const bk = await tx.booking.findUniqueOrThrow({ where: { id } });
+        if (bk.status !== 'BOOKED') throw conflict('BOOKING_NOT_ACTIVE', 'Booking sudah tidak aktif');
+        if (!isOnHold(bk, now, settings.bookingHoldMin)) {
+          throw conflict('BOOKING_TOO_EARLY', `Check-in baru bisa mulai ${localHHMM(holdStartsAt(bk.startAt, settings.bookingHoldMin), settings.utcOffsetMin)}`);
+        }
+        let cancelledDepositBillId: string | null = null;
+        if (bk.depositBillId) {
+          const dep = await tx.bill.findUniqueOrThrow({ where: { id: bk.depositBillId } });
+          if (dep.status === 'OPEN') {
+            await tx.bill.update({ where: { id: dep.id }, data: { status: 'CANCELLED', cancelReason: 'DP tidak dibayar saat check-in' } });
+            cancelledDepositBillId = dep.id;
+          }
+        }
+        const session = await this.ctx.sessions.startTx(
+          tx, user,
+          { unitId: bk.unitId, mode: input.mode, packageId: input.packageId, memberId: bk.memberId },
+          { now, settings },
+          { bookingId: bk.id },
+        );
+        await tx.booking.update({ where: { id }, data: { status: 'CHECKED_IN', saleBillId: session.billId } });
+        await audit(tx, { userId: user.id, action: 'booking.check_in', entity: 'Booking', entityId: id, data: { sessionId: session.id, billId: session.billId } });
+        return { unitId: bk.unitId, cancelledDepositBillId };
+      });
+    } catch (err) {
+      rethrowBusy(err, pre.unit.name);
+    }
+    this.ctx.sessions.touch(r.unitId);
+    this.changed(id);
+    if (r.cancelledDepositBillId) this.ctx.bus.emit('bill.changed', r.cancelledDepositBillId);
+    return { unitId: r.unitId };
   }
 }

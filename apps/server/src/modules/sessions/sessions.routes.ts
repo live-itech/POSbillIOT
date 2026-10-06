@@ -11,6 +11,7 @@ const startSchema = z.object({
   mode: z.enum(SESSION_MODES),
   packageId: z.string().min(1).optional(),
   memberId: z.string().min(1).nullable().optional(),
+  ignoreBooking: z.boolean().optional(),
 });
 const extendSchema = z.object({ minutes: z.number().int().min(1).max(600), requestId: z.string().min(8).max(64) });
 const moveSchema = z.object({ toUnitId: z.string().min(1) });

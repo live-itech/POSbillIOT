@@ -8,7 +8,7 @@ import { SimulatorPanel } from './SimulatorPanel';
 
 const unit = (id: string, name: string, ch: number): UnitView => ({
   id, name, sortOrder: ch, unitTypeId: 'reg', unitTypeName: 'Reguler', unitTypeColor: '#7C3AED', area: '',
-  deviceId: 'd1', relayChannel: ch, state: 'ACTIVE', lightOverride: null, light: ch === 1, deviceOnline: true, session: null,
+  deviceId: 'd1', relayChannel: ch, state: 'ACTIVE', lightOverride: null, light: ch === 1, deviceOnline: true, booking: null, session: null,
 });
 
 beforeEach(() => {

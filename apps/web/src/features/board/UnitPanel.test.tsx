@@ -10,7 +10,7 @@ import { UnitPanel } from './UnitPanel';
 
 const idle: UnitView = {
   id: 'u1', name: 'Meja 1', sortOrder: 1, unitTypeId: 'reg', unitTypeName: 'Reguler', unitTypeColor: '#7C3AED', area: '',
-  deviceId: null, relayChannel: null, state: 'ACTIVE', lightOverride: null, light: null, deviceOnline: null, session: null,
+  deviceId: null, relayChannel: null, state: 'ACTIVE', lightOverride: null, light: null, deviceOnline: null, booking: null, session: null,
 };
 
 function mockFetch() {
