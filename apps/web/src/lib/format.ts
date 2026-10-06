@@ -39,3 +39,16 @@ export function localDateInput(now: Date, utcOffsetMin: number): string {
   const l = new Date(now.getTime() + utcOffsetMin * 60_000);
   return `${l.getUTCFullYear()}-${pad2(l.getUTCMonth() + 1)}-${pad2(l.getUTCDate())}`;
 }
+
+/** Jam lokal outlet "HH:MM" untuk <input type="time">. */
+export function localTimeInput(at: Date, utcOffsetMin: number): string {
+  const l = new Date(at.getTime() + utcOffsetMin * 60_000);
+  return `${pad2(l.getUTCHours())}:${pad2(l.getUTCMinutes())}`;
+}
+
+/** Tanggal "YYYY-MM-DD" + jam "HH:MM" lokal outlet → ISO UTC. */
+export function localDateTimeToIso(date: string, time: string, utcOffsetMin: number): string {
+  const [y, m, d] = date.split('-').map(Number) as [number, number, number];
+  const [hh, mm] = time.split(':').map(Number) as [number, number];
+  return new Date(Date.UTC(y, m - 1, d, hh, mm) - utcOffsetMin * 60_000).toISOString();
+}

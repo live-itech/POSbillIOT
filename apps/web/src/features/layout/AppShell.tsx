@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
-import { Coffee, LayoutGrid, LogOut, Moon, Receipt, Settings, Users, Wallet } from 'lucide-react';
+import { CalendarDays, Coffee, LayoutGrid, LogOut, Moon, Receipt, Settings, Users, Wallet } from 'lucide-react';
 import { NavLink, Outlet } from 'react-router';
 import { Logo } from '../../components/brand/Brand';
 import { Button } from '../../components/ui/button';
@@ -38,6 +38,7 @@ export function AppShell() {
   );
   const items = [
     { to: '/', label: 'Meja', icon: LayoutGrid, show: true },
+    { to: '/bookings', label: 'Booking', icon: CalendarDays, show: true },
     { to: '/transactions', label: 'Transaksi', icon: Receipt, show: true },
     { to: '/members', label: 'Member', icon: Users, show: true },
     { to: '/shift', label: 'Shift', icon: Wallet, show: true },
