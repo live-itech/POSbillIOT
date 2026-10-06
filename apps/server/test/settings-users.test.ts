@@ -21,7 +21,18 @@ describe('settings', () => {
       taxPct: 0, taxScope: 'ALL', servicePct: 0, serviceScope: 'ALL', discountApprovalPct: 10,
       receiptHeader: '', receiptFooter: 'Terima kasih!',
       printerDriver: 'SIMULATOR', printerDevicePath: '/dev/usb/lp0', printerHost: '', printerPort: 9100,
+      bookingHoldMin: 15, bookingNoShowMin: 15,
     });
+  });
+  it('owner mengatur hold & no-show booking dengan batas', async () => {
+    const cookie = await loginAs(t.app, 'owner');
+    const ok = await t.app.inject({ method: 'PUT', url: '/api/settings', headers: { cookie }, payload: { bookingHoldMin: 30, bookingNoShowMin: 20 } });
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json()).toMatchObject({ bookingHoldMin: 30, bookingNoShowMin: 20 });
+    for (const payload of [{ bookingHoldMin: -1 }, { bookingHoldMin: 241 }, { bookingNoShowMin: 0 }, { bookingNoShowMin: 1.5 }]) {
+      const res = await t.app.inject({ method: 'PUT', url: '/api/settings', headers: { cookie }, payload });
+      expect(res.statusCode).toBe(400);
+    }
   });
   it('owner mengatur pajak, service, struk, dan printer', async () => {
     const cookie = await loginAs(t.app, 'owner');

@@ -1,4 +1,4 @@
-import { DEFAULT_TRANSACTION_SETTINGS, type ShiftSummary } from '@funplay/shared';
+import { DEFAULT_BOOKING_SETTINGS, DEFAULT_TRANSACTION_SETTINGS, type ShiftSummary } from '@funplay/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -9,8 +9,8 @@ import { ShiftPage } from './ShiftPage';
 
 const summary: ShiftSummary = {
   shift: { id: 's1', openedAt: '2026-10-01T01:00:00.000Z', openedByName: 'Andi', openingCash: 100000, closedAt: null, closedByName: null, countedCash: null, expectedCash: null, note: null },
-  sales: { CASH: 56000, QRIS: 26000, CARD: 0, TRANSFER: 0 },
-  voids: { CASH: 0, QRIS: 0, CARD: 0, TRANSFER: 0 },
+  sales: { CASH: 56000, QRIS: 26000, CARD: 0, TRANSFER: 0, DEPOSIT: 0 },
+  voids: { CASH: 0, QRIS: 0, CARD: 0, TRANSFER: 0, DEPOSIT: 0 },
   billCount: 2,
   voidCount: 0,
   expectedCash: 156000,
@@ -19,7 +19,7 @@ const summary: ShiftSummary = {
 beforeEach(() => {
   useBoard.setState({
     ...useBoard.getInitialState(),
-    settings: { outletType: 'BILLIARD', outletName: 'FunPlay', address: '', utcOffsetMin: 420, roundingBlockMin: 15, minChargeMin: 60, warnBeforeMin: 5, pauseKeepsLightOn: true, autoOffUnexpected: false, ...DEFAULT_TRANSACTION_SETTINGS },
+    settings: { outletType: 'BILLIARD', outletName: 'FunPlay', address: '', utcOffsetMin: 420, roundingBlockMin: 15, minChargeMin: 60, warnBeforeMin: 5, pauseKeepsLightOn: true, autoOffUnexpected: false, ...DEFAULT_TRANSACTION_SETTINGS, ...DEFAULT_BOOKING_SETTINGS },
   });
 });
 afterEach(() => vi.unstubAllGlobals());

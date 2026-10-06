@@ -12,3 +12,4 @@ export * from './billing/bill-totals';
 export * from './billing/payment';
 export * from './receipt/receipt';
 export * from './receipt/escpos';
+export * from './bookings';

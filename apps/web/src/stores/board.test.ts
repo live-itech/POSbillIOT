@@ -1,4 +1,4 @@
-import { DEFAULT_TRANSACTION_SETTINGS } from '@funplay/shared';
+import { DEFAULT_BOOKING_SETTINGS, DEFAULT_TRANSACTION_SETTINGS } from '@funplay/shared';
 import type { BoardSnapshot, UnitView } from '@funplay/shared';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { computeOffset, useBoard } from './board';
@@ -10,7 +10,7 @@ const unit = (id: string, name: string, sortOrder: number): UnitView => ({
 
 const snapshot = (units: UnitView[]): BoardSnapshot => ({
   serverTime: '2026-10-01T03:10:00.000Z',
-  settings: { outletType: 'BILLIARD', outletName: 'FunPlay', address: '', utcOffsetMin: 420, roundingBlockMin: 15, minChargeMin: 60, warnBeforeMin: 5, pauseKeepsLightOn: true, autoOffUnexpected: false, ...DEFAULT_TRANSACTION_SETTINGS },
+  settings: { outletType: 'BILLIARD', outletName: 'FunPlay', address: '', utcOffsetMin: 420, roundingBlockMin: 15, minChargeMin: 60, warnBeforeMin: 5, pauseKeepsLightOn: true, autoOffUnexpected: false, ...DEFAULT_TRANSACTION_SETTINGS, ...DEFAULT_BOOKING_SETTINGS },
   units, devices: [], tariffs: [],
 });
 

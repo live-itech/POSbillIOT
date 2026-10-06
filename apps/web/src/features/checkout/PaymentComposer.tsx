@@ -1,4 +1,4 @@
-import { cashPayment, PAYMENT_METHOD_LABEL, PAYMENT_METHODS, type PaymentInput, type PaymentMethod } from '@funplay/shared';
+import { cashPayment, MANUAL_PAYMENT_METHODS, PAYMENT_METHOD_LABEL, type PaymentInput, type PaymentMethod } from '@funplay/shared';
 import { X } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '../../components/ui/button';
@@ -24,7 +24,7 @@ export function PaymentComposer({ remaining, payments, onChange }: { remaining: 
   return (
     <div className="flex flex-col gap-3">
       <div className="grid grid-cols-4 gap-2">
-        {PAYMENT_METHODS.map((m) => (
+        {MANUAL_PAYMENT_METHODS.map((m) => (
           <button key={m} type="button" aria-pressed={method === m} onClick={() => setMethod(m)}
             className={cn('rounded-xl py-2 text-sm font-bold transition', method === m ? 'bg-primary text-white' : 'bg-primary-soft text-primary-ink')}>
             {PAYMENT_METHOD_LABEL[m]}

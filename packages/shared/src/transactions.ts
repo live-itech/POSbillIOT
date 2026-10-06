@@ -1,16 +1,22 @@
 import type { ChargeLine } from './billing/charge';
 import type { SessionView } from './views';
 
-export const PAYMENT_METHODS = ['CASH', 'QRIS', 'CARD', 'TRANSFER'] as const;
+export const PAYMENT_METHODS = ['CASH', 'QRIS', 'CARD', 'TRANSFER', 'DEPOSIT'] as const;
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
-export const PAYMENT_METHOD_LABEL: Record<PaymentMethod, string> = { CASH: 'Tunai', QRIS: 'QRIS', CARD: 'Kartu', TRANSFER: 'Transfer' };
+export const PAYMENT_METHOD_LABEL: Record<PaymentMethod, string> = { CASH: 'Tunai', QRIS: 'QRIS', CARD: 'Kartu', TRANSFER: 'Transfer', DEPOSIT: 'DP booking' };
+/** Metode yang bisa dipilih kasir. DEPOSIT hanya diisi otomatis dari DP booking. */
+export const MANUAL_PAYMENT_METHODS = ['CASH', 'QRIS', 'CARD', 'TRANSFER'] as const satisfies readonly PaymentMethod[];
 
 export const BILL_STATUSES = ['OPEN', 'PAID', 'VOID', 'CANCELLED'] as const;
 export type BillStatus = (typeof BILL_STATUSES)[number];
 export const BILL_STATUS_LABEL: Record<BillStatus, string> = { OPEN: 'Belum dibayar', PAID: 'Lunas', VOID: 'Void', CANCELLED: 'Dibatalkan' };
 
-export const LINE_TYPES = ['TIME', 'PRODUCT', 'SERVICE', 'CUSTOM'] as const;
+export const LINE_TYPES = ['TIME', 'PRODUCT', 'SERVICE', 'CUSTOM', 'DEPOSIT'] as const;
 export type LineType = (typeof LINE_TYPES)[number];
+
+/** SALE = bill penjualan biasa; DEPOSIT = bill DP booking (satu baris DEPOSIT). */
+export const BILL_KINDS = ['SALE', 'DEPOSIT'] as const;
+export type BillKind = (typeof BILL_KINDS)[number];
 
 export const PRODUCT_KINDS = ['STOCK', 'SERVICE'] as const;
 export type ProductKind = (typeof PRODUCT_KINDS)[number];

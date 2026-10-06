@@ -59,6 +59,7 @@ enum LineType {
   PRODUCT
   SERVICE
   CUSTOM
+  DEPOSIT
 }
 
 enum DiscountType {
@@ -71,6 +72,25 @@ enum PaymentMethod {
   QRIS
   CARD
   TRANSFER
+  DEPOSIT
+}
+
+enum BillKind {
+  SALE
+  DEPOSIT
+}
+
+enum BookingStatus {
+  BOOKED
+  CHECKED_IN
+  NO_SHOW
+  CANCELLED
+}
+
+enum DepositOutcome {
+  USED
+  FORFEITED
+  REFUNDED
 }
 
 enum StockReason {
@@ -122,6 +142,8 @@ model Setting {
   printerDevicePath   String   @default("/dev/usb/lp0")
   printerHost         String   @default("")
   printerPort         Int      @default(9100)
+  bookingHoldMin      Int      @default(15)
+  bookingNoShowMin    Int      @default(15)
   updatedAt         DateTime   @updatedAt
 }
 
@@ -194,6 +216,7 @@ model Unit {
   sessions      Session[]        @relation("UnitSessions")
   activeSession Session?         @relation("ActiveSession")
   segments      SessionSegment[]
+  bookings      Booking[]
 
   @@unique([deviceId, relayChannel])
 }
@@ -257,6 +280,16 @@ model Bill {
   voidedAt          DateTime?
   voidShiftId       String?
   voidShift         Shift?        @relation("BillVoidShift", fields: [voidShiftId], references: [id])
+  kind                  BillKind      @default(SALE)
+  memberId              String?
+  member                Member?       @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  /// Snapshot saat member dipasang (tidak berubah walau member/level diedit).
+  memberName            String?
+  memberLevelName       String?
+  memberTimeDiscountPct Int           @default(0)
+  memberFnbDiscountPct  Int           @default(0)
+  /// Bill SALE milik booking (check-in). Tanpa relasi Prisma: Booking juga menunjuk Bill.
+  bookingId             String?
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
   sessions          Session[]
@@ -266,6 +299,7 @@ model Bill {
 
   @@index([status])
   @@index([createdAt])
+  @@index([bookingId])
 }
 
 model BillLine {
@@ -468,4 +502,67 @@ model DeviceEvent {
   detail   Json            @default("{}")
 
   @@index([deviceId, at])
+}
+
+model MemberLevel {
+  id              String   @id @default(cuid())
+  name            String   @unique
+  timeDiscountPct Int      @default(0)
+  fnbDiscountPct  Int      @default(0)
+  sortOrder       Int      @default(0)
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  members         Member[]
+}
+
+model Member {
+  id        String      @id @default(cuid())
+  code      String      @unique
+  name      String
+  phone     String      @default("")
+  levelId   String
+  level     MemberLevel @relation(fields: [levelId], references: [id], onDelete: Restrict)
+  active    Boolean     @default(true)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  bills     Bill[]
+  bookings  Booking[]
+
+  @@index([phone])
+}
+
+/// Satu baris (id = 1). `next` = nomor member berikutnya; barisnya dikunci untuk setiap penulisan member.
+model MemberCounter {
+  id   Int @id @default(1)
+  next Int @default(1)
+}
+
+model Booking {
+  id                String          @id @default(cuid())
+  unitId            String
+  unit              Unit            @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  customerName      String
+  phone             String          @default("")
+  memberId          String?
+  member            Member?         @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  startAt           DateTime
+  durationMin       Int
+  note              String          @default("")
+  status            BookingStatus   @default(BOOKED)
+  depositAmount     Int             @default(0)
+  /// Bill DEPOSIT (DP). Tanpa relasi Prisma (lihat Bill.bookingId).
+  depositBillId     String?         @unique
+  depositOutcome    DepositOutcome?
+  depositUsedAmount Int             @default(0)
+  /// Bill SALE yang dibuat saat check-in.
+  saleBillId        String?         @unique
+  holdNotifiedAt    DateTime?
+  cancelReason      String?
+  createdById       String
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@index([unitId, startAt])
+  @@index([status, startAt])
 }

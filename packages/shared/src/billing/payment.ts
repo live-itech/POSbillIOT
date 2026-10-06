@@ -20,6 +20,7 @@ export function checkPayments(grandTotal: number, payments: PaymentInput[]): Pay
   const checked: CheckedPayment[] = [];
   for (const p of payments) {
     if (!isPositiveInt(p.amount)) return invalid('Nominal pembayaran harus bilangan bulat lebih dari 0');
+    if (p.method === 'DEPOSIT') return invalid('DP booking tidak tersedia untuk bill ini');
     const reference = p.reference?.trim() || null;
     if (p.method !== 'CASH') {
       if (p.received != null) return invalid('Kembalian hanya untuk pembayaran tunai');

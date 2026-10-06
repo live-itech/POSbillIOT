@@ -1,8 +1,8 @@
-import { DEFAULT_TRANSACTION_SETTINGS, type BillView, type PublicSettings } from '@funplay/shared';
+import { DEFAULT_BOOKING_SETTINGS, DEFAULT_TRANSACTION_SETTINGS, type BillView, type PublicSettings } from '@funplay/shared';
 import { expect, it } from 'vitest';
 import { computeBillPreview } from './useBill';
 
-const settings: PublicSettings = { outletType: 'BILLIARD', outletName: 'FunPlay', address: '', utcOffsetMin: 420, roundingBlockMin: 15, minChargeMin: 60, warnBeforeMin: 5, pauseKeepsLightOn: true, autoOffUnexpected: false, ...DEFAULT_TRANSACTION_SETTINGS };
+const settings: PublicSettings = { outletType: 'BILLIARD', outletName: 'FunPlay', address: '', utcOffsetMin: 420, roundingBlockMin: 15, minChargeMin: 60, warnBeforeMin: 5, pauseKeepsLightOn: true, autoOffUnexpected: false, ...DEFAULT_TRANSACTION_SETTINGS, ...DEFAULT_BOOKING_SETTINGS };
 
 it('pratinjau menjumlahkan baris tersimpan + biaya waktu sesi yang masih berjalan', () => {
   const bill: BillView = {

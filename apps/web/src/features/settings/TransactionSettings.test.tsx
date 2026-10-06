@@ -1,4 +1,4 @@
-import { DEFAULT_TRANSACTION_SETTINGS } from '@funplay/shared';
+import { DEFAULT_BOOKING_SETTINGS, DEFAULT_TRANSACTION_SETTINGS } from '@funplay/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -6,7 +6,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { PrinterSettings } from './PrinterSettings';
 import { TransactionSettings } from './TransactionSettings';
 
-const settings = { outletType: 'BILLIARD', outletName: 'FunPlay', address: '', utcOffsetMin: 420, roundingBlockMin: 15, minChargeMin: 60, warnBeforeMin: 5, pauseKeepsLightOn: true, autoOffUnexpected: false, ...DEFAULT_TRANSACTION_SETTINGS };
+const settings = { outletType: 'BILLIARD', outletName: 'FunPlay', address: '', utcOffsetMin: 420, roundingBlockMin: 15, minChargeMin: 60, warnBeforeMin: 5, pauseKeepsLightOn: true, autoOffUnexpected: false, ...DEFAULT_TRANSACTION_SETTINGS, ...DEFAULT_BOOKING_SETTINGS };
 
 function mockFetch() {
   return vi.fn(async (url: string, init?: RequestInit) => {

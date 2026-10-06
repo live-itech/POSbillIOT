@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { cashPayment, checkPayments } from './payment';
 
 describe('checkPayments', () => {
+  it('DP booking ditolak tanpa konteks booking', () => {
+    expect(checkPayments(10000, [{ method: 'DEPOSIT', amount: 10000 }])).toMatchObject({ ok: false, code: 'PAYMENT_INVALID' });
+  });
   it('tunai dengan kembalian', () => {
     const r = checkPayments(79920, [{ method: 'CASH', amount: 79920, received: 100000 }]);
     expect(r).toEqual({ ok: true, paid: 79920, change: 20080, payments: [{ method: 'CASH', amount: 79920, received: 100000, change: 20080, reference: null }] });

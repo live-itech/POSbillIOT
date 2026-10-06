@@ -25,6 +25,8 @@ export function toPublicSettings(s: Setting): PublicSettings {
     printerDevicePath: s.printerDevicePath,
     printerHost: s.printerHost,
     printerPort: s.printerPort,
+    bookingHoldMin: s.bookingHoldMin,
+    bookingNoShowMin: s.bookingNoShowMin,
   };
 }
 
@@ -61,5 +63,7 @@ export const settingsUpdateSchema = z
     printerDevicePath: z.string().trim().max(200),
     printerHost: z.string().trim().max(100),
     printerPort: z.number().int().min(1).max(65535),
+    bookingHoldMin: z.number().int().min(0).max(240),
+    bookingNoShowMin: z.number().int().min(1).max(240),
   })
   .partial();
