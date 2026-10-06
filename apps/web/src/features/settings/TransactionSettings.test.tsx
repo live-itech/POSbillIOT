@@ -17,13 +17,14 @@ function mockFetch() {
     return new Response('{}', { status: 404 });
   });
 }
-const wrap = (ui: React.ReactNode) => render(<QueryClientProvider client={new QueryClient()}>{ui}</QueryClientProvider>);
+const wrap = (ui: React.ReactNode, client = new QueryClient()) => render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
 afterEach(() => vi.unstubAllGlobals());
 
 it('menyimpan pajak & cakupan', async () => {
   const f = mockFetch();
   vi.stubGlobal('fetch', f);
-  wrap(<TransactionSettings />);
+  const client = new QueryClient();
+  wrap(<TransactionSettings />, client);
   const tax = await screen.findByLabelText('Pajak (%)');
   await userEvent.clear(tax);
   await userEvent.type(tax, '11');
@@ -33,6 +34,7 @@ it('menyimpan pajak & cakupan', async () => {
     const call = f.mock.calls.find(([u, i]) => u === '/api/settings' && i?.method === 'PUT');
     expect(JSON.parse(String(call![1]!.body))).toMatchObject({ taxPct: 11, taxScope: 'FNB', servicePct: 0, discountApprovalPct: 10 });
   });
+  await waitFor(() => expect(client.getQueryData<{ taxPct: number }>(['/settings'])?.taxPct).toBe(11));
 });
 
 it('printer LAN menampilkan host & port; tes cetak memanggil API', async () => {
